@@ -1,0 +1,138 @@
+{% extends "observability/base.html" %}
+{% load static %}
+
+{% block body %}
+<header class="border-bottom border-secondary-subtle">
+  <div class="container-fluid px-4 py-3 d-flex align-items-center justify-content-between gap-3">
+    <div class="d-flex align-items-center gap-3">
+      <span class="brand-mark" aria-hidden="true">R</span>
+      <div>
+        <p class="eyebrow mb-0">LOCAL ORCHESTRATION OBSERVABILITY</p>
+        <h1 class="h4 mb-0">REALMS Frontend</h1>
+      </div>
+    </div>
+    <div class="d-flex align-items-center gap-2" aria-live="polite">
+      <span class="status-dot status-waiting" id="connection-dot"></span>
+      <span class="small text-secondary" id="connection-label">Checking MCP configuration…</span>
+    </div>
+  </div>
+</header>
+
+<main class="container-fluid px-4 py-4" id="main-content">
+  <section class="hero-panel rounded-4 p-4 p-lg-5 mb-4">
+    <div class="row align-items-end g-4">
+      <div class="col-lg-8">
+        <p class="eyebrow mb-2">OBSERVED, NOT ASSUMED</p>
+        <h2 class="display-6 fw-semibold mb-3">See the orchestration surface as it actually runs.</h2>
+        <p class="lead text-secondary mb-0">
+          Real MCP tool definitions and activity handled by this local frontend. No credentials,
+          raw prompts, or provider payloads are sent to the browser.
+        </p>
+      </div>
+      <div class="col-lg-4">
+        <dl class="row mb-0 small">
+          <dt class="col-5 text-secondary">Transport</dt>
+          <dd class="col-7 text-end font-monospace">stdio MCP</dd>
+          <dt class="col-5 text-secondary">Observation</dt>
+          <dd class="col-7 text-end font-monospace">this process</dd>
+          <dt class="col-5 text-secondary">Persistence</dt>
+          <dd class="col-7 text-end font-monospace">none</dd>
+        </dl>
+      </div>
+    </div>
+  </section>
+
+  <section class="row g-4 mb-4" aria-label="System summary">
+    <div class="col-md-4">
+      <article class="metric-card rounded-4 h-100 p-4">
+        <p class="eyebrow mb-2">MCP TOOLS</p>
+        <p class="display-5 fw-semibold mb-1" id="tool-count">—</p>
+        <p class="text-secondary mb-0" id="tool-source">Waiting for discovery</p>
+      </article>
+    </div>
+    <div class="col-md-4">
+      <article class="metric-card rounded-4 h-100 p-4">
+        <p class="eyebrow mb-2">DISCOVERY LATENCY</p>
+        <p class="display-5 fw-semibold mb-1" id="discovery-latency">—</p>
+        <p class="text-secondary mb-0">Measured server-side</p>
+      </article>
+    </div>
+    <div class="col-md-4">
+      <article class="metric-card rounded-4 h-100 p-4">
+        <p class="eyebrow mb-2">MODEL ACTIVITY</p>
+        <p class="display-5 fw-semibold mb-1" id="model-activity">0</p>
+        <p class="text-secondary mb-0">No model calls invoked by this UI</p>
+      </article>
+    </div>
+  </section>
+
+  <div class="row g-4">
+    <section class="col-xl-8" aria-labelledby="tools-title">
+      <div class="panel rounded-4 h-100">
+        <div class="panel-header d-flex justify-content-between align-items-center p-4">
+          <div>
+            <p class="eyebrow mb-1">LIVE MCP CATALOG</p>
+            <h2 class="h5 mb-0" id="tools-title">Available endpoints</h2>
+          </div>
+          <button class="btn btn-sm btn-outline-info" id="refresh-tools" type="button">
+            Refresh discovery
+          </button>
+        </div>
+        <div class="p-4" id="tools-container" aria-live="polite">
+          <p class="text-secondary mb-0">Discovering tools from the configured MCP server…</p>
+        </div>
+      </div>
+    </section>
+
+    <section class="col-xl-4" aria-labelledby="activity-title">
+      <div class="panel rounded-4 h-100">
+        <div class="panel-header p-4">
+          <p class="eyebrow mb-1">PROCESS-LOCAL</p>
+          <h2 class="h5 mb-0" id="activity-title">Observed activity</h2>
+        </div>
+        <ol class="activity-list list-unstyled p-4 mb-0" id="activity-list" aria-live="polite">
+          <li class="text-secondary">Waiting for activity…</li>
+        </ol>
+      </div>
+    </section>
+  </div>
+
+  <section class="panel rounded-4 mt-4 p-4" aria-labelledby="api-title">
+    <p class="eyebrow mb-1">DJANGO BFF</p>
+    <h2 class="h5 mb-3" id="api-title">Local API endpoints</h2>
+    <div class="table-responsive">
+      <table class="table table-dark table-borderless align-middle mb-0">
+        <thead><tr><th>Method</th><th>Path</th><th>What it does</th></tr></thead>
+        <tbody>
+          <tr><td><span class="method-badge">GET</span></td><td><code>/api/v1/status/</code></td><td>Reports frontend readiness and MCP configuration state.</td></tr>
+          <tr><td><span class="method-badge">GET</span></td><td><code>/api/v1/tools/</code></td><td>Starts the configured MCP server and returns its actual tool catalog.</td></tr>
+          <tr><td><span class="method-badge">GET</span></td><td><code>/api/v1/activity/</code></td><td>Returns bounded, sanitized events observed by this process.</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section class="panel rounded-4 mt-4" aria-labelledby="models-title">
+    <div class="panel-header p-4">
+      <p class="eyebrow mb-1">DISCOVERY TRACE</p>
+      <h2 class="h5 mb-0" id="models-title">Which components and models are doing what</h2>
+    </div>
+    <div class="p-4">
+      <div class="row g-3 mb-4" id="discovery-steps">
+        <div class="col-12 text-secondary">Waiting for live discovery…</div>
+      </div>
+      <div class="table-responsive">
+        <table class="table table-dark table-borderless align-middle mb-2">
+          <thead><tr><th>Model role</th><th>Observed model</th><th>Role in orchestration</th></tr></thead>
+          <tbody id="model-roles">
+            <tr><td colspan="3" class="text-secondary">No model attribution observed yet.</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p class="small text-secondary mb-0" id="attribution-note"></p>
+    </div>
+  </section>
+</main>
+
+<script src="{% static 'observability/dashboard.js' %}" defer></script>
+{% endblock %}

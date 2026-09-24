@@ -1,0 +1,147 @@
+:root {
+  --realm-cyan: #54d6d1;
+  --realm-violet: #9887ff;
+  --realm-bg: #090d12;
+  --realm-panel: #101720;
+  --realm-border: rgba(255, 255, 255, 0.09);
+}
+
+body {
+  min-height: 100vh;
+  background:
+    radial-gradient(circle at 10% 0%, rgba(84, 214, 209, 0.12), transparent 32rem),
+    radial-gradient(circle at 95% 15%, rgba(152, 135, 255, 0.1), transparent 28rem),
+    var(--realm-bg);
+  color: #eef4f8;
+}
+
+header {
+  background: rgba(9, 13, 18, 0.82);
+  backdrop-filter: blur(16px);
+}
+
+.brand-mark {
+  display: grid;
+  width: 2.5rem;
+  height: 2.5rem;
+  place-items: center;
+  border: 1px solid rgba(84, 214, 209, 0.55);
+  border-radius: 0.75rem;
+  background: rgba(84, 214, 209, 0.08);
+  color: var(--realm-cyan);
+  font-weight: 700;
+}
+
+.eyebrow {
+  color: var(--realm-cyan);
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+}
+
+.hero-panel,
+.metric-card,
+.panel {
+  border: 1px solid var(--realm-border);
+  background: rgba(16, 23, 32, 0.9);
+  box-shadow: 0 1.25rem 4rem rgba(0, 0, 0, 0.18);
+}
+
+.hero-panel {
+  background:
+    linear-gradient(125deg, rgba(84, 214, 209, 0.08), transparent 46%),
+    rgba(16, 23, 32, 0.92);
+}
+
+.panel-header {
+  border-bottom: 1px solid var(--realm-border);
+}
+
+.status-dot {
+  width: 0.58rem;
+  height: 0.58rem;
+  border-radius: 50%;
+  background: #7d8790;
+  box-shadow: 0 0 0 0.22rem rgba(125, 135, 144, 0.12);
+}
+
+.status-live {
+  background: #45d483;
+  box-shadow: 0 0 0 0.22rem rgba(69, 212, 131, 0.12);
+}
+
+.status-error {
+  background: #ff6b78;
+  box-shadow: 0 0 0 0.22rem rgba(255, 107, 120, 0.12);
+}
+
+.tool-card {
+  border: 1px solid var(--realm-border);
+  background: rgba(255, 255, 255, 0.018);
+}
+
+.trace-step {
+  border-top: 2px solid rgba(84, 214, 209, 0.5);
+  background: rgba(255, 255, 255, 0.018);
+}
+
+.trace-order {
+  color: var(--realm-violet);
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-size: 0.75rem;
+  font-weight: 700;
+}
+
+.tool-name,
+.method-badge {
+  color: var(--realm-cyan);
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+}
+
+.method-badge {
+  display: inline-block;
+  min-width: 3.2rem;
+  padding: 0.25rem 0.5rem;
+  border: 1px solid rgba(84, 214, 209, 0.35);
+  border-radius: 0.4rem;
+  background: rgba(84, 214, 209, 0.08);
+  font-size: 0.75rem;
+  font-weight: 700;
+  text-align: center;
+}
+
+.activity-list {
+  max-height: 36rem;
+  overflow-y: auto;
+}
+
+.activity-item {
+  position: relative;
+  padding: 0 0 1.25rem 1.2rem;
+  border-left: 1px solid rgba(84, 214, 209, 0.24);
+}
+
+.activity-item::before {
+  position: absolute;
+  top: 0.35rem;
+  left: -0.28rem;
+  width: 0.5rem;
+  height: 0.5rem;
+  border-radius: 50%;
+  background: var(--realm-cyan);
+  content: "";
+}
+
+code {
+  color: #b8afff;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    scroll-behavior: auto !important;
+    transition-duration: 0.01ms !important;
+  }
+}
