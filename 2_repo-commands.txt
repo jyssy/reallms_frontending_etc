@@ -1,83 +1,83 @@
 • The guarded workflow does not support writable access to two repositories in one plan. Use two plan/approve/execute cycles:
 
-  1. Instrument the orchestrator, with the Django repo as read-only context.
-  2. Update Django, with the modified orchestrator as read-only context.
+1. Instrument the orchestrator, with the Django repo as read-only context.
+2. Update Django, with the modified orchestrator as read-only context.
 
-  This preserves integration order and the one-writer-per-repository rule.
+This preserves integration order and the one-writer-per-repository rule.
 
-  ## 1. Orchestrator plan
+## 1. Orchestrator plan
 
-  /Users/jelambeadmin/Documents/orchestrator_code/.venv/bin/orchestrate plan \
-    "Add opt-in, metadata-only observability without changing existing orchestration behavior. Preserve all existing MCP tools, CLI commands, return
-    schemas, routing, provider behavior, approval boundaries, and fallback behavior. Add a versioned trace-event contract and optional no-op-by-default
-    observer covering run ID, ordering, timestamps, durations, router, retrieval, embedding, reranking, specialist, judge critique, optional revision,
-    provider attempts, retries, and completion. Add an additive observed MCP interface that can publish sanitized progress to the Django MCP client.
-    Observability failures must never fail, delay materially, or change an orchestration result. Never publish prompts, completions, source chunks,
-    credentials, provider bodies, scanner output, local paths, policy content, or raw exceptions. Use fake providers in tests and do not make live model
-    calls." \
-    --repo-root /Users/jelambeadmin/Documents/orchestrator_code \
-    --allow 'mcp_server.py' \
-    --allow 'orchestrator/**' \
-    --allow 'tests/**' \
-    --allow 'how-orchestration-herein-works.md' \
-    --add-dir /Users/jelambeadmin/Documents/reallms_frontending_etc
+/Users/jelambeadmin/Documents/orchestrator_code/.venv/bin/orchestrate plan \
+"Add opt-in, metadata-only observability without changing existing orchestration behavior. Preserve all existing MCP tools, CLI commands, return
+schemas, routing, provider behavior, approval boundaries, and fallback behavior. Add a versioned trace-event contract and optional no-op-by-default
+observer covering run ID, ordering, timestamps, durations, router, retrieval, embedding, reranking, specialist, judge critique, optional revision,
+provider attempts, retries, and completion. Add an additive observed MCP interface that can publish sanitized progress to the Django MCP client.
+Observability failures must never fail, delay materially, or change an orchestration result. Never publish prompts, completions, source chunks,
+credentials, provider bodies, scanner output, local paths, policy content, or raw exceptions. Use fake providers in tests and do not make live model
+calls." \
+--repo-root /Users/jelambeadmin/Documents/orchestrator_code \
+--allow 'mcp_server.py' \
+--allow 'orchestrator/**' \
+--allow 'tests/**' \
+--allow 'how-orchestration-herein-works.md' \
+--add-dir /Users/jelambeadmin/Documents/reallms_frontending_etc
 
-  Review the printed proposal and plan record. If correct:
+Review the printed proposal and plan record. If correct:
 
-  /Users/jelambeadmin/Documents/orchestrator_code/.venv/bin/orchestrate approve \
-    --latest \
-    --repo-root /Users/jelambeadmin/Documents/orchestrator_code \
-    --approved-by "YOUR_NAME"
+/Users/jelambeadmin/Documents/orchestrator_code/.venv/bin/orchestrate approve \
+--latest \
+--repo-root /Users/jelambeadmin/Documents/orchestrator_code \
+--approved-by "YOUR_NAME"
 
-  Validate the execution command first:
+Validate the execution command first:
 
-  /Users/jelambeadmin/Documents/orchestrator_code/.venv/bin/orchestrate execute \
-    --latest \
-    --repo-root /Users/jelambeadmin/Documents/orchestrator_code \
-    --print-only
+/Users/jelambeadmin/Documents/orchestrator_code/.venv/bin/orchestrate execute \
+--latest \
+--repo-root /Users/jelambeadmin/Documents/orchestrator_code \
+--print-only
 
-  Then launch Codex:
+Then launch Codex:
 
-  /Users/jelambeadmin/Documents/orchestrator_code/.venv/bin/orchestrate execute \
-    --latest \
-    --repo-root /Users/jelambeadmin/Documents/orchestrator_code \
-    --executor codex
+/Users/jelambeadmin/Documents/orchestrator_code/.venv/bin/orchestrate execute \
+--latest \
+--repo-root /Users/jelambeadmin/Documents/orchestrator_code \
+--executor codex
 
-  ## 2. Django frontend plan
+## 2. Django frontend plan
 
-  Only run this after the orchestrator implementation and tests finish:
+Only run this after the orchestrator implementation and tests finish:
 
-  /Users/jelambeadmin/Documents/orchestrator_code/.venv/bin/orchestrate plan \
-    "Integrate the additive orchestrator observability contract into realms-frontend-local. Preserve the existing dashboard and MCP discovery behavior.
-    Add a REALMS provider/model activity page and an Orchestrator run-trace page; receive sanitized progress from the new observed MCP interface; deliver
-    bounded process-local updates to the browser using SSE or polling; distinguish configured, observed, skipped, fallback, and not-reported models.
-    Never expose credentials, prompts, completions, source chunks, provider bodies, scanner output, local paths, policy content, or raw exceptions. Do
-    not add database persistence or migrations. Add contract, view, redaction, ordering, retention, and UI tests." \
-    --repo-root /Users/jelambeadmin/Documents/reallms_frontending_etc \
-    --allow 'config/**' \
-    --allow 'observability/**' \
-    --allow 'templates/**' \
-    --allow 'static/**' \
-    --allow 'tests/**' \
-    --allow 'README.md' \
-    --allow 'SETUP.md' \
-    --allow 'pyproject.toml' \
-    --allow 'uv.lock' \
-    --add-dir /Users/jelambeadmin/Documents/orchestrator_code
+/Users/jelambeadmin/Documents/orchestrator_code/.venv/bin/orchestrate plan \
+"Integrate the additive orchestrator observability contract into realms-frontend-local. Preserve the existing dashboard and MCP discovery behavior.
+Add a REALMS provider/model activity page and an Orchestrator run-trace page; receive sanitized progress from the new observed MCP interface; deliver
+bounded process-local updates to the browser using SSE or polling; distinguish configured, observed, skipped, fallback, and not-reported models.
+Never expose credentials, prompts, completions, source chunks, provider bodies, scanner output, local paths, policy content, or raw exceptions. Do
+not add database persistence or migrations. Add contract, view, redaction, ordering, retention, and UI tests." \
+--repo-root /Users/jelambeadmin/Documents/reallms_frontending_etc \
+--allow 'config/**' \
+--allow 'observability/**' \
+--allow 'templates/**' \
+--allow 'static/**' \
+--allow 'tests/**' \
+--allow 'README.md' \
+--allow 'SETUP.md' \
+--allow 'pyproject.toml' \
+--allow 'uv.lock' \
+--add-dir /Users/jelambeadmin/Documents/orchestrator_code
 
-  Then repeat approval and execution for the frontend:
+Then repeat approval and execution for the frontend:
 
-  /Users/jelambeadmin/Documents/orchestrator_code/.venv/bin/orchestrate approve \
-    --latest \
-    --repo-root /Users/jelambeadmin/Documents/reallms_frontending_etc \
-    --approved-by "YOUR_NAME"
+/Users/jelambeadmin/Documents/orchestrator_code/.venv/bin/orchestrate approve \
+--latest \
+--repo-root /Users/jelambeadmin/Documents/reallms_frontending_etc \
+--approved-by "YOUR_NAME"
 
-  /Users/jelambeadmin/Documents/orchestrator_code/.venv/bin/orchestrate execute \
-    --latest \
-    --repo-root /Users/jelambeadmin/Documents/reallms_frontending_etc \
-    --print-only
+/Users/jelambeadmin/Documents/orchestrator_code/.venv/bin/orchestrate execute \
+--latest \
+--repo-root /Users/jelambeadmin/Documents/reallms_frontending_etc \
+--print-only
 
-  /Users/jelambeadmin/Documents/orchestrator_code/.venv/bin/orchestrate execute \
-    --latest \
-    --repo-root /Users/jelambeadmin/Documents/reallms_frontending_etc \
-    --executor codex
+/Users/jelambeadmin/Documents/orchestrator_code/.venv/bin/orchestrate execute \
+--latest \
+--repo-root /Users/jelambeadmin/Documents/reallms_frontending_etc \
+--executor codex

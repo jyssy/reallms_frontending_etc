@@ -70,3 +70,18 @@ ORCHESTRATOR_ROOT = Path(
     os.environ.get("REALMS_ORCHESTRATOR_ROOT", BASE_DIR.parent / "orchestrator_code")
 ).resolve()
 ORCHESTRATOR_MCP_TIMEOUT_SECONDS = float(os.environ.get("REALMS_MCP_TIMEOUT_SECONDS", "15"))
+ORCHESTRATOR_OBSERVED_TIMEOUT_SECONDS = float(
+    os.environ.get("REALMS_OBSERVED_MCP_TIMEOUT_SECONDS", "305")
+)
+
+# Browser-safe model labels are configured independently from the orchestrator.
+# They are validated again before entering an API response and never sourced
+# from the orchestrator's environment or dotenv file.
+OBSERVABILITY_MODEL_CATALOG = {
+    "router": os.environ.get("REALMS_OBSERVABILITY_ROUTER_MODEL"),
+    "embedding": os.environ.get("REALMS_OBSERVABILITY_EMBEDDING_MODEL"),
+    "reranker": os.environ.get("REALMS_OBSERVABILITY_RERANKER_MODEL"),
+    "reviewer": os.environ.get("REALMS_OBSERVABILITY_REVIEWER_MODEL"),
+    "judge": os.environ.get("REALMS_OBSERVABILITY_JUDGE_MODEL"),
+}
+OBSERVABILITY_MOCK_MODE = os.environ.get("REALMS_OBSERVABILITY_MOCK", "false").lower() == "true"

@@ -81,6 +81,106 @@ header {
   background: rgba(255, 255, 255, 0.018);
 }
 
+.state-card,
+.provider-card {
+  border: 1px solid var(--realm-border);
+  background: rgba(16, 23, 32, 0.78);
+}
+
+.source-badge,
+.state-pill,
+.trace-status {
+  display: inline-block;
+  padding: 0.25rem 0.55rem;
+  border: 1px solid var(--realm-border);
+  border-radius: 999px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-size: 0.72rem;
+  line-height: 1.2;
+}
+
+.source-badge {
+  color: var(--realm-cyan);
+  background: rgba(84, 214, 209, 0.08);
+}
+
+.state-cell {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+}
+
+.state-configured {
+  color: #c7d0d8;
+}
+
+.state-observed,
+.trace-status-success {
+  border-color: rgba(69, 212, 131, 0.4);
+  color: #71e7a3;
+  background: rgba(69, 212, 131, 0.08);
+}
+
+.state-skipped,
+.trace-status-skipped {
+  color: #aab3bb;
+  background: rgba(170, 179, 187, 0.08);
+}
+
+.state-fallback,
+.trace-status-degraded,
+.trace-status-retrying {
+  border-color: rgba(255, 193, 93, 0.42);
+  color: #ffd080;
+  background: rgba(255, 193, 93, 0.08);
+}
+
+.state-not-reported,
+.trace-status-started {
+  border-color: rgba(152, 135, 255, 0.4);
+  color: #b8afff;
+  background: rgba(152, 135, 255, 0.08);
+}
+
+.trace-status-failed {
+  border-color: rgba(255, 107, 120, 0.42);
+  color: #ff8993;
+  background: rgba(255, 107, 120, 0.08);
+}
+
+.run-list {
+  display: grid;
+  gap: 0.5rem;
+  max-height: 40rem;
+  overflow-y: auto;
+}
+
+.run-button {
+  display: flex;
+  width: 100%;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 0.8rem;
+  border: 1px solid var(--realm-border);
+  border-radius: 0.65rem;
+  background: rgba(255, 255, 255, 0.018);
+  color: inherit;
+  text-align: left;
+}
+
+.run-button:hover,
+.run-button:focus-visible,
+.run-button[aria-pressed="true"] {
+  border-color: rgba(84, 214, 209, 0.55);
+  background: rgba(84, 214, 209, 0.08);
+}
+
+.run-button:focus-visible {
+  outline: 0.18rem solid rgba(84, 214, 209, 0.32);
+  outline-offset: 0.12rem;
+}
+
 .trace-step {
   border-top: 2px solid rgba(84, 214, 209, 0.5);
   background: rgba(255, 255, 255, 0.018);

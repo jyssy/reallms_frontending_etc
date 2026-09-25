@@ -1,0 +1,74 @@
+{% extends "observability/base.html" %}
+{% load static %}
+
+{% block title %}Model activity · REALMS Frontend{% endblock %}
+
+{% block body %}
+<header class="border-bottom border-secondary-subtle">
+  <div class="container-fluid px-4 py-3 d-flex flex-wrap align-items-center justify-content-between gap-3">
+    <div class="d-flex align-items-center gap-3">
+      <a class="brand-mark text-decoration-none" href="{% url 'observability:dashboard' %}" aria-label="Dashboard">R</a>
+      <div>
+        <p class="eyebrow mb-0">REALMS OBSERVABILITY</p>
+        <h1 class="h4 mb-0">Provider &amp; model activity</h1>
+      </div>
+    </div>
+    <nav aria-label="Observability views" class="d-flex gap-2">
+      <a class="btn btn-sm btn-outline-light" href="{% url 'observability:dashboard' %}">Dashboard</a>
+      <a class="btn btn-sm btn-outline-info" href="{% url 'observability:run-traces' %}">Run traces</a>
+    </nav>
+  </div>
+</header>
+
+<main class="container-fluid px-4 py-4" id="main-content">
+  <section class="hero-panel rounded-4 p-4 mb-4">
+    <div class="d-flex flex-wrap justify-content-between align-items-end gap-3">
+      <div>
+        <p class="eyebrow mb-2">ATTRIBUTION WITHOUT CONTENT</p>
+        <h2 class="h3 mb-2">What was configured, used, skipped, or omitted</h2>
+        <p class="text-secondary mb-0">
+          Names come only from the frontend catalog or the structured result. Progress events
+          contain metadata, never prompts, completions, source text, or provider bodies.
+        </p>
+      </div>
+      <span class="source-badge" id="model-source" aria-live="polite">Loading process state…</span>
+    </div>
+  </section>
+
+  <section class="row g-3 mb-4" aria-label="Activity state definitions">
+    <div class="col-sm-6 col-xl"><article class="state-card rounded-3 p-3 h-100"><span class="state-pill state-configured">configured</span><p class="small text-secondary mt-2 mb-0">Declared in this frontend's safe catalog.</p></article></div>
+    <div class="col-sm-6 col-xl"><article class="state-card rounded-3 p-3 h-100"><span class="state-pill state-observed">observed</span><p class="small text-secondary mt-2 mb-0">Named by a structured observed result.</p></article></div>
+    <div class="col-sm-6 col-xl"><article class="state-card rounded-3 p-3 h-100"><span class="state-pill state-skipped">skipped</span><p class="small text-secondary mt-2 mb-0">Explicitly skipped by a trace event.</p></article></div>
+    <div class="col-sm-6 col-xl"><article class="state-card rounded-3 p-3 h-100"><span class="state-pill state-fallback">fallback</span><p class="small text-secondary mt-2 mb-0">Trace metadata reports fallback behavior.</p></article></div>
+    <div class="col-sm-6 col-xl"><article class="state-card rounded-3 p-3 h-100"><span class="state-pill state-not-reported">not-reported</span><p class="small text-secondary mt-2 mb-0">Activity exists but no model name was reported.</p></article></div>
+  </section>
+
+  <section class="panel rounded-4 mb-4" aria-labelledby="model-table-title">
+    <div class="panel-header p-4">
+      <p class="eyebrow mb-1">MODEL ROLES</p>
+      <h2 class="h5 mb-0" id="model-table-title">Role-level evidence</h2>
+    </div>
+    <div class="table-responsive p-4">
+      <table class="table table-dark table-borderless align-middle mb-0">
+        <thead><tr><th>Role</th><th>Configured</th><th>Observed</th><th>State</th><th>Events</th></tr></thead>
+        <tbody id="model-activity-body" aria-live="polite">
+          <tr><td colspan="5" class="text-secondary">Loading model activity…</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section class="panel rounded-4" aria-labelledby="provider-title">
+    <div class="panel-header p-4">
+      <p class="eyebrow mb-1">PROVIDER ATTEMPTS</p>
+      <h2 class="h5 mb-0" id="provider-title">Local and remote activity</h2>
+    </div>
+    <div class="row g-3 p-4" id="provider-cards" aria-live="polite">
+      <div class="col-12 text-secondary">Loading provider activity…</div>
+    </div>
+  </section>
+  <p class="small text-secondary mt-3 mb-0" id="model-refresh-status" aria-live="polite"></p>
+</main>
+
+<script src="{% static 'observability/model_activity.js' %}" defer></script>
+{% endblock %}

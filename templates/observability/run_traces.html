@@ -1,0 +1,81 @@
+{% extends "observability/base.html" %}
+{% load static %}
+
+{% block title %}Run traces · REALMS Frontend{% endblock %}
+
+{% block body %}
+<header class="border-bottom border-secondary-subtle">
+  <div class="container-fluid px-4 py-3 d-flex flex-wrap align-items-center justify-content-between gap-3">
+    <div class="d-flex align-items-center gap-3">
+      <a class="brand-mark text-decoration-none" href="{% url 'observability:dashboard' %}" aria-label="Dashboard">R</a>
+      <div>
+        <p class="eyebrow mb-0">ORCHESTRATOR OBSERVABILITY</p>
+        <h1 class="h4 mb-0">Run traces</h1>
+      </div>
+    </div>
+    <nav aria-label="Observability views" class="d-flex gap-2">
+      <a class="btn btn-sm btn-outline-light" href="{% url 'observability:dashboard' %}">Dashboard</a>
+      <a class="btn btn-sm btn-outline-info" href="{% url 'observability:model-activity' %}">Models</a>
+    </nav>
+  </div>
+</header>
+
+<main class="container-fluid px-4 py-4" id="main-content">
+  <section class="hero-panel rounded-4 p-4 mb-4">
+    <div class="d-flex flex-wrap justify-content-between align-items-end gap-3">
+      <div>
+        <p class="eyebrow mb-2">ORDERED, BOUNDED, PROCESS-LOCAL</p>
+        <h2 class="h3 mb-2">Sanitized orchestration progress</h2>
+        <p class="text-secondary mb-0">
+          Events are ordered by run sequence and retained only in bounded memory. A restart
+          clears all traces; no run content is persisted.
+        </p>
+      </div>
+      <span class="source-badge" id="trace-source" aria-live="polite">Loading process state…</span>
+    </div>
+  </section>
+
+  <section class="row g-3 mb-4" aria-label="Trace retention summary">
+    <div class="col-md-4"><article class="metric-card rounded-4 p-4"><p class="eyebrow mb-2">RUNS RETAINED</p><p class="display-6 mb-0" id="run-count">—</p></article></div>
+    <div class="col-md-4"><article class="metric-card rounded-4 p-4"><p class="eyebrow mb-2">EVENTS RETAINED</p><p class="display-6 mb-0" id="event-count">—</p></article></div>
+    <div class="col-md-4"><article class="metric-card rounded-4 p-4"><p class="eyebrow mb-2">EVENTS EVICTED</p><p class="display-6 mb-0" id="dropped-count">—</p></article></div>
+  </section>
+
+  <div class="row g-4">
+    <section class="col-xl-4" aria-labelledby="runs-title">
+      <div class="panel rounded-4 h-100">
+        <div class="panel-header p-4">
+          <p class="eyebrow mb-1">RECENT RUNS</p>
+          <h2 class="h5 mb-0" id="runs-title">Select a trace</h2>
+        </div>
+        <div class="run-list p-3" id="run-list" aria-live="polite">
+          <p class="text-secondary p-2 mb-0">Loading traces…</p>
+        </div>
+      </div>
+    </section>
+
+    <section class="col-xl-8" aria-labelledby="trace-title">
+      <div class="panel rounded-4 h-100">
+        <div class="panel-header p-4 d-flex flex-wrap justify-content-between gap-3">
+          <div>
+            <p class="eyebrow mb-1">EVENT TIMELINE</p>
+            <h2 class="h5 mb-0" id="trace-title">No run selected</h2>
+          </div>
+          <span class="source-badge" id="trace-lifecycle">waiting</span>
+        </div>
+        <div class="table-responsive p-4">
+          <table class="table table-dark table-borderless align-middle mb-0">
+            <thead><tr><th>Seq</th><th>Time</th><th>Component</th><th>Event</th><th>Status</th><th>Metadata</th></tr></thead>
+            <tbody id="trace-events" aria-live="polite">
+              <tr><td colspan="6" class="text-secondary">No observed run is available.</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+  </div>
+  <p class="small text-secondary mt-3 mb-0" id="trace-refresh-status" aria-live="polite"></p>
+</main>
+
+<script src="{% static 'observability/run_traces.js' %}" defer></script>
+{% endblock %}

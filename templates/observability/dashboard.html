@@ -11,9 +11,15 @@
         <h1 class="h4 mb-0">REALMS Frontend</h1>
       </div>
     </div>
-    <div class="d-flex align-items-center gap-2" aria-live="polite">
-      <span class="status-dot status-waiting" id="connection-dot"></span>
-      <span class="small text-secondary" id="connection-label">Checking MCP configuration…</span>
+    <div class="d-flex flex-wrap align-items-center justify-content-end gap-3">
+      <nav aria-label="Observability views" class="d-flex gap-2">
+        <a class="btn btn-sm btn-outline-light" href="{% url 'observability:model-activity' %}">Models</a>
+        <a class="btn btn-sm btn-outline-light" href="{% url 'observability:run-traces' %}">Run traces</a>
+      </nav>
+      <div class="d-flex align-items-center gap-2" aria-live="polite">
+        <span class="status-dot status-waiting" id="connection-dot"></span>
+        <span class="small text-secondary" id="connection-label">Checking MCP configuration…</span>
+      </div>
     </div>
   </div>
 </header>
@@ -107,6 +113,8 @@
           <tr><td><span class="method-badge">GET</span></td><td><code>/api/v1/status/</code></td><td>Reports frontend readiness and MCP configuration state.</td></tr>
           <tr><td><span class="method-badge">GET</span></td><td><code>/api/v1/tools/</code></td><td>Starts the configured MCP server and returns its actual tool catalog.</td></tr>
           <tr><td><span class="method-badge">GET</span></td><td><code>/api/v1/activity/</code></td><td>Returns bounded, sanitized events observed by this process.</td></tr>
+          <tr><td><span class="method-badge">GET</span></td><td><code>/api/v1/observability/models/</code></td><td>Returns the sanitized model and provider activity projection.</td></tr>
+          <tr><td><span class="method-badge">GET</span></td><td><code>/api/v1/observability/runs/</code></td><td>Returns bounded, ordered run traces from this process.</td></tr>
         </tbody>
       </table>
     </div>

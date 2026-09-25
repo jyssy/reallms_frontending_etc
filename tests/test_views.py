@@ -5,11 +5,13 @@ from django.urls import reverse
 
 from observability.activity import reset_events
 from observability.adapters import MCPUnavailableError, discovery_context
+from observability.traces import trace_store
 
 
 @pytest.fixture(autouse=True)
 def clean_activity():
     reset_events()
+    trace_store.reset()
 
 
 def test_dashboard_renders_truthful_scope(client):
@@ -76,3 +78,58 @@ def test_activity_endpoint_is_bounded_metadata(client):
 
     assert response.status_code == 200
     assert response.json()["scope"] == "Calls handled by this frontend only"
+
+
+def test_observability_pages_render_navigation_and_accessible_states(client):
+    models = client.get(reverse("observability:model-activity"))
+    runs = client.get(reverse("observability:run-traces"))
+
+    assert models.status_code == 200
+    assert b"Provider &amp; model activity" in models.content
+    assert b"not-reported" in models.content
+    assert b'aria-live="polite"' in models.content
+    assert runs.status_code == 200
+    assert b"Sanitized orchestration progress" in runs.content
+    assert b"No observed run is available" in runs.content
+
+
+def test_empty_observability_apis_are_bounded_and_not_cached(client):
+    models = client.get(reverse("observability:model-activity-api"))
+    runs = client.get(reverse("observability:run-traces-api"))
+
+    assert models.status_code == 200
+    assert models.headers["Cache-Control"] == "no-store"
+    assert models.json()["source"] == "live_process"
+    assert len(models.json()["models"]) == 5
+    assert runs.status_code == 200
+    assert runs.headers["Cache-Control"] == "no-store"
+    assert "Access-Control-Allow-Origin" not in runs.headers
+    assert runs.json()["runs"] == []
+    assert runs.json()["retention"]["max_total_events"] == 512
+
+
+def test_mock_mode_is_visibly_synthetic(client, settings):
+    settings.OBSERVABILITY_MOCK_MODE = True
+    settings.OBSERVABILITY_MODEL_CATALOG = {"reviewer": "configured-reviewer"}
+
+    models = client.get(reverse("observability:model-activity-api")).json()
+    runs = client.get(reverse("observability:run-traces-api")).json()
+
+    assert models["source"] == "synthetic_fixture"
+    assert models["observed"] is False
+    assert runs["source"] == "synthetic_fixture"
+    assert runs["observed"] is False
+    assert runs["runs"][0]["result"]["model_roles"] == {
+        "reviewer": "synthetic-reviewer"
+    }
+
+
+def test_status_publishes_versioned_endpoint_contract_without_paths(client, settings, tmp_path):
+    settings.ORCHESTRATOR_ROOT = tmp_path / "private-location"
+
+    response = client.get(reverse("observability:status-api"))
+    payload = response.json()
+
+    assert payload["observability"]["contract_version"] == 1
+    assert payload["observability"]["endpoints"]["runs"].endswith("/runs/")
+    assert str(tmp_path) not in response.content.decode()
