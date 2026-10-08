@@ -16,7 +16,7 @@ from .contract import (
     parse_observed_result,
     parse_trace_event,
 )
-from .traces import trace_store
+from .storage import get_trace_store
 
 
 class MCPUnavailableError(RuntimeError):
@@ -211,7 +211,7 @@ async def observe_orchestrator(
             run_id = event["run_id"]
         if event["run_id"] != run_id:
             return
-        if trace_store.add_event(event):
+        if get_trace_store().add_event(event):
             accepted_events += 1
 
     started = time.perf_counter()
@@ -245,7 +245,9 @@ async def observe_orchestrator(
         raise ObservedRunUnavailableError("tool_error")
     safe_result = parse_observed_result(structured)
     if run_id is not None:
-        trace_store.finish_run(run_id, safe_result)
+        get_trace_store().finish_run(
+            run_id, safe_result, configured=settings.OBSERVABILITY_MODEL_CATALOG
+        )
     latency_ms = round((time.perf_counter() - started) * 1000)
     record_event(
         "mcp.run.observe",

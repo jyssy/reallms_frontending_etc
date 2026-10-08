@@ -2,6 +2,7 @@ import os
 import secrets
 from pathlib import Path
 
+from django.core.exceptions import ImproperlyConfigured
 from django.utils.csp import CSP
 
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -79,9 +80,36 @@ ORCHESTRATOR_OBSERVED_TIMEOUT_SECONDS = float(
 # from the orchestrator's environment or dotenv file.
 OBSERVABILITY_MODEL_CATALOG = {
     "router": os.environ.get("REALMS_OBSERVABILITY_ROUTER_MODEL"),
-    "embedding": os.environ.get("REALMS_OBSERVABILITY_EMBEDDING_MODEL"),
-    "reranker": os.environ.get("REALMS_OBSERVABILITY_RERANKER_MODEL"),
     "reviewer": os.environ.get("REALMS_OBSERVABILITY_REVIEWER_MODEL"),
     "judge": os.environ.get("REALMS_OBSERVABILITY_JUDGE_MODEL"),
 }
+OBSERVABILITY_EXECUTOR_LABEL = os.environ.get("REALMS_OBSERVABILITY_EXECUTOR")
 OBSERVABILITY_MOCK_MODE = os.environ.get("REALMS_OBSERVABILITY_MOCK", "false").lower() == "true"
+OBSERVABILITY_STORAGE_BACKEND = os.environ.get(
+    "REALMS_OBSERVABILITY_STORAGE", "memory"
+).lower()
+OBSERVABILITY_SQLITE_PATH = os.environ.get("REALMS_OBSERVABILITY_SQLITE_PATH")
+
+
+def _bounded_env_int(name: str, default: int, *, maximum: int) -> int:
+    try:
+        value = int(os.environ.get(name, str(default)))
+    except ValueError as error:
+        raise ImproperlyConfigured(f"{name} must be an integer.") from error
+    if not 1 <= value <= maximum:
+        raise ImproperlyConfigured(f"{name} must be between 1 and {maximum}.")
+    return value
+
+
+OBSERVABILITY_SQLITE_MAX_RUNS = _bounded_env_int(
+    "REALMS_OBSERVABILITY_SQLITE_MAX_RUNS", 500, maximum=100_000
+)
+OBSERVABILITY_SQLITE_RETENTION_DAYS = _bounded_env_int(
+    "REALMS_OBSERVABILITY_SQLITE_RETENTION_DAYS", 7, maximum=3_650
+)
+if OBSERVABILITY_STORAGE_BACKEND not in {"memory", "sqlite"}:
+    raise ImproperlyConfigured("REALMS_OBSERVABILITY_STORAGE must be memory or sqlite.")
+if OBSERVABILITY_STORAGE_BACKEND == "sqlite" and not OBSERVABILITY_SQLITE_PATH:
+    raise ImproperlyConfigured(
+        "REALMS_OBSERVABILITY_SQLITE_PATH is required when SQLite history is enabled."
+    )

@@ -189,7 +189,7 @@ def parse_observed_result(value: object) -> dict[str, Any]:
     raw_roles = value.get("model_roles")
     roles: dict[str, str] = {}
     if isinstance(raw_roles, Mapping):
-        for role in ("reviewer", "judge"):
+        for role in ("router", "reviewer", "judge"):
             model = safe_model_name(raw_roles.get(role))
             if model:
                 roles[role] = model
@@ -210,3 +210,13 @@ def configured_model_catalog(value: object) -> dict[str, str]:
         if model:
             catalog[role] = model
     return catalog
+
+
+def configured_executor_context(value: object) -> dict[str, str | None]:
+    """Build the browser-safe external executor attribution."""
+    executor = safe_model_name(value)
+    return {
+        "name": executor,
+        "state": "configured" if executor else "not-reported",
+        "scope": "external_client",
+    }

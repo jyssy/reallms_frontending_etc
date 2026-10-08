@@ -75,20 +75,28 @@ Calls made by unrelated MCP clients are not visible.
 
 ## Browser-safe model catalog
 
-Configured model names are optional and independent from the orchestrator's
-private configuration. Set only public model labels that are safe to display:
+Configured model names are independent from the orchestrator's private
+configuration and have no application-code defaults. Supply only public model
+labels that are safe to display. Reviewer and judge identities arrive from
+observed orchestration results, so model upgrades require no frontend change.
+Configure only identities that the upstream result cannot currently report:
 
 ```sh
-REALMS_OBSERVABILITY_ROUTER_MODEL=router-label \
-REALMS_OBSERVABILITY_EMBEDDING_MODEL=embedding-label \
-REALMS_OBSERVABILITY_RERANKER_MODEL=reranker-label \
-REALMS_OBSERVABILITY_REVIEWER_MODEL=reviewer-label \
-REALMS_OBSERVABILITY_JUDGE_MODEL=judge-label \
+REALMS_OBSERVABILITY_ROUTER_MODEL=qwen2.5:1.5b \
+REALMS_OBSERVABILITY_EXECUTOR=Codex \
 uv run python manage.py runserver 127.0.0.1:8000
 ```
 
+Optional reviewer or judge variables can provide pre-run expectations, but an
+observed result takes precedence and is displayed alongside any differing
+configured value.
+
 Labels are limited to conservative model-identifier characters and 128
-characters. Missing or invalid labels are omitted rather than echoed.
+characters. Missing or invalid labels are omitted rather than echoed. Set the
+executor label to `Claude` when Claude is the external client applying the
+orchestrator's advisory result; this setting does not claim that execution was
+observed by the trace. The browser does not connect directly to Ollama or any
+other provider.
 
 Observed model-backed calls use a separate 305-second timeout so the existing
 15-second discovery timeout remains unchanged. Override it server-side only
@@ -98,6 +106,47 @@ when needed:
 REALMS_OBSERVED_MCP_TIMEOUT_SECONDS=240 \
 uv run python manage.py runserver 127.0.0.1:8000
 ```
+
+## Optional durable history
+
+The default bounded history lives only in the Django process. To retain
+sanitized run metadata across restarts, explicitly select SQLite and provide a
+server-only database path:
+
+```sh
+REALMS_OBSERVABILITY_STORAGE=sqlite \
+REALMS_OBSERVABILITY_SQLITE_PATH=/private/local/path/realms-observability.sqlite3 \
+REALMS_OBSERVABILITY_SQLITE_MAX_RUNS=500 \
+REALMS_OBSERVABILITY_SQLITE_RETENTION_DAYS=7 \
+uv run python manage.py runserver 127.0.0.1:8000
+```
+
+The parent directory and database are created only when SQLite mode is used.
+Choose a private location and do not place the database or exports in version
+control. This feature stores only allowlisted observability metadata and does
+not make calls from other MCP clients visible.
+
+Use the same environment variables for portable export or backup commands:
+
+```sh
+REALMS_OBSERVABILITY_STORAGE=sqlite \
+REALMS_OBSERVABILITY_SQLITE_PATH=/private/local/path/realms-observability.sqlite3 \
+uv run python manage.py observability_export \
+  --format json --output ./observability-export.json
+
+REALMS_OBSERVABILITY_STORAGE=sqlite \
+REALMS_OBSERVABILITY_SQLITE_PATH=/private/local/path/realms-observability.sqlite3 \
+uv run python manage.py observability_export \
+  --format csv --output ./observability-export
+
+REALMS_OBSERVABILITY_STORAGE=sqlite \
+REALMS_OBSERVABILITY_SQLITE_PATH=/private/local/path/realms-observability.sqlite3 \
+uv run python manage.py observability_backup \
+  --output ./observability-backup.sqlite3
+```
+
+Commands refuse existing outputs by default. Add `--force` only when replacing
+the named export or backup is intentional.
 
 ## Synthetic mock mode
 

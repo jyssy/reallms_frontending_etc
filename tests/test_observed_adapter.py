@@ -137,3 +137,5 @@ def test_observed_adapter_cancellation_leaves_a_bounded_partial_run(configuratio
     run = trace_store.snapshot()["runs"][0]
     assert run["lifecycle"] == "in_progress"
     assert run["event_count"] == 1
+    assert run["workflow"][0]["status"] == "pending"
+    assert run["workflow"][-1]["status"] == "pending"

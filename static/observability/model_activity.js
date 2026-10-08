@@ -1,5 +1,6 @@
 const modelEndpoint = "/api/v1/observability/models/";
 const byId = (id) => document.getElementById(id);
+const visibleModelRoles = new Set(["router", "reviewer", "judge"]);
 
 async function fetchModelActivity() {
   const response = await fetch(modelEndpoint, {
@@ -24,35 +25,45 @@ function statePill(state) {
 }
 
 function renderModels(payload) {
-  const source = payload.source === "synthetic_fixture" ? "Synthetic fixture" : "Live process";
+  const source =
+    payload.source === "synthetic_fixture"
+      ? "Demo fixture · no live models"
+      : payload.source === "sqlite_history"
+        ? "SQLite history"
+        : "Live process";
   byId("model-source").textContent = source;
 
   const body = byId("model-activity-body");
   body.replaceChildren();
-  payload.models.forEach((model) => {
-    const row = document.createElement("tr");
-    const role = document.createElement("th");
-    role.scope = "row";
-    role.textContent = labelRole(model.role);
-    const configured = document.createElement("td");
-    configured.textContent = model.configured_model || "Not configured";
-    const observed = document.createElement("td");
-    observed.textContent = model.observed_models.length
-      ? model.observed_models.join(", ")
-      : "No name reported";
-    const states = document.createElement("td");
-    states.className = "state-cell";
-    if (model.states.length) {
-      model.states.forEach((state) => states.append(statePill(state)));
-    } else {
-      states.textContent = "No evidence";
-      states.classList.add("text-secondary");
-    }
-    const count = document.createElement("td");
-    count.textContent = String(model.event_count);
-    row.append(role, configured, observed, states, count);
-    body.append(row);
-  });
+  payload.models
+    .filter((model) => visibleModelRoles.has(model.role))
+    .forEach((model) => {
+      const row = document.createElement("tr");
+      const role = document.createElement("th");
+      role.scope = "row";
+      role.textContent = labelRole(model.role);
+      const configured = document.createElement("td");
+      configured.textContent = model.configured_model || "Not configured";
+      const observed = document.createElement("td");
+      observed.textContent =
+        payload.source === "synthetic_fixture" && model.observed_models.length
+          ? "Demo placeholder — no live model ran"
+          : model.observed_models.length
+            ? model.observed_models.join(", ")
+            : "No name reported";
+      const states = document.createElement("td");
+      states.className = "state-cell";
+      if (model.states.length) {
+        model.states.forEach((state) => states.append(statePill(state)));
+      } else {
+        states.textContent = "No evidence";
+        states.classList.add("text-secondary");
+      }
+      const count = document.createElement("td");
+      count.textContent = String(model.event_count);
+      row.append(role, configured, observed, states, count);
+      body.append(row);
+    });
 
   const cards = byId("provider-cards");
   cards.replaceChildren();

@@ -24,22 +24,116 @@
   <section class="hero-panel rounded-4 p-4 mb-4">
     <div class="d-flex flex-wrap justify-content-between align-items-end gap-3">
       <div>
-        <p class="eyebrow mb-2">ORDERED, BOUNDED, PROCESS-LOCAL</p>
-        <h2 class="h3 mb-2">Sanitized orchestration progress</h2>
+        <p class="eyebrow mb-2" id="run-source-heading">LATEST OBSERVED WORK</p>
+        <h2 class="h3 mb-2">Orchestration run observatory</h2>
         <p class="text-secondary mb-0">
-          Events are ordered by run sequence and retained only in bounded memory. A restart
-          clears all traces; no run content is persisted.
+          Reconstruct the latest routed job: models, phase timing, retrieval, provider
+          activity, fallbacks, and the metadata-only evidence behind every claim.
         </p>
       </div>
-      <span class="source-badge" id="trace-source" aria-live="polite">Loading process state…</span>
+      <div class="d-flex flex-wrap justify-content-end gap-2">
+        <span class="source-badge" id="run-status" aria-live="polite">waiting</span>
+        <span class="source-badge" id="trace-source" aria-live="polite">Loading process state…</span>
+      </div>
     </div>
   </section>
 
-  <section class="row g-3 mb-4" aria-label="Trace retention summary">
-    <div class="col-md-4"><article class="metric-card rounded-4 p-4"><p class="eyebrow mb-2">RUNS RETAINED</p><p class="display-6 mb-0" id="run-count">—</p></article></div>
-    <div class="col-md-4"><article class="metric-card rounded-4 p-4"><p class="eyebrow mb-2">EVENTS RETAINED</p><p class="display-6 mb-0" id="event-count">—</p></article></div>
-    <div class="col-md-4"><article class="metric-card rounded-4 p-4"><p class="eyebrow mb-2">EVENTS EVICTED</p><p class="display-6 mb-0" id="dropped-count">—</p></article></div>
+  <section class="run-overview mb-4" aria-label="Selected run summary">
+    <article class="run-fact">
+      <p class="eyebrow mb-2">END TO END</p>
+      <p class="run-fact-value mb-1" id="run-elapsed">—</p>
+      <p class="small text-secondary mb-0" id="run-window">No timing reported</p>
+    </article>
+    <article class="run-fact">
+      <p class="eyebrow mb-2" id="models-engaged-label">MODELS ENGAGED</p>
+      <p class="run-fact-value mb-1" id="run-model-count">—</p>
+      <p class="small text-secondary mb-0" id="run-model-detail">Awaiting attribution</p>
+    </article>
+    <article class="run-fact">
+      <p class="eyebrow mb-2">PROVIDER ACTIVITY</p>
+      <p class="run-fact-value mb-1" id="run-provider-count">—</p>
+      <p class="small text-secondary mb-0" id="run-provider-detail">No attempts reported</p>
+    </article>
+    <article class="run-fact">
+      <p class="eyebrow mb-2">WORK CLASS</p>
+      <p class="run-fact-value mb-1" id="run-task-type">—</p>
+      <p class="small text-secondary mb-0" id="run-result-status">No result reported</p>
+    </article>
   </section>
+
+  <section class="panel rounded-4 mb-4" aria-labelledby="handoff-title">
+    <div class="panel-header p-4 d-flex flex-wrap justify-content-between gap-3">
+      <div>
+        <p class="eyebrow mb-1">ACTORS &amp; HANDOFF</p>
+        <h2 class="h5 mb-1" id="handoff-title">Who reasons, judges, and executes</h2>
+        <p class="small text-secondary mb-0">
+          Observed orchestration is separated from the configured client that applies its result.
+        </p>
+      </div>
+      <span class="source-badge" id="executor-state" aria-live="polite">Loading executor…</span>
+    </div>
+    <div class="handoff-map p-4" id="handoff-map" aria-live="polite">
+      <p class="text-secondary mb-0">Waiting for actor attribution…</p>
+    </div>
+    <p class="small text-secondary px-4 pb-4 mb-0" id="handoff-note">
+      Executor activity is outside trace contract v1 and is never presented as observed.
+    </p>
+  </section>
+
+  <section class="panel rounded-4 mb-4" aria-labelledby="workflow-title">
+    <div class="panel-header p-4 d-flex flex-wrap justify-content-between gap-3">
+      <div>
+        <p class="eyebrow mb-1">VISUAL WORKFLOW</p>
+        <h2 class="h5 mb-0" id="workflow-title">No run selected</h2>
+      </div>
+      <div class="workflow-legend" aria-label="Model attribution legend">
+        <span class="state-pill state-observed">observed</span>
+        <span class="state-pill state-configured">configured · not confirmed</span>
+        <span class="state-pill state-fallback">fallback</span>
+        <span class="state-pill state-skipped">skipped</span>
+        <span class="state-pill state-not-reported">not reported</span>
+      </div>
+    </div>
+    <div class="workflow-scroll p-4">
+      <ol class="workflow-trail" id="workflow-trail" aria-live="polite">
+        <li class="text-secondary">Waiting for an observed run…</li>
+      </ol>
+    </div>
+    <p class="small text-secondary px-4 pb-4 mb-0" id="workflow-note">
+      Configured model labels describe expected routing only; they are not proof that a model ran.
+    </p>
+  </section>
+
+  <div class="row g-4 mb-4">
+    <section class="col-xl-7" aria-labelledby="models-used-title">
+      <div class="panel rounded-4 h-100">
+        <div class="panel-header p-4">
+          <p class="eyebrow mb-1">MODEL ROSTER</p>
+          <h2 class="h5 mb-1" id="models-used-title">Who handled this run</h2>
+          <p class="small text-secondary mb-0">Observed identities are separated from configured expectations.</p>
+        </div>
+        <div class="model-roster p-4" id="run-model-roster" aria-live="polite">
+          <p class="text-secondary mb-0">Waiting for model attribution…</p>
+        </div>
+      </div>
+    </section>
+
+    <section class="col-xl-5" aria-labelledby="resources-title">
+      <div class="panel rounded-4 h-100">
+        <div class="panel-header p-4">
+          <p class="eyebrow mb-1">OPERATIONAL EVIDENCE</p>
+          <h2 class="h5 mb-1" id="resources-title">Resources and retrieval</h2>
+          <p class="small text-secondary mb-0">Only measurements explicitly present in the trace are shown.</p>
+        </div>
+        <dl class="resource-list p-4 mb-0" id="run-resources" aria-live="polite">
+          <div><dt>Retrieval</dt><dd>Not reported</dd></div>
+          <div><dt>Embedding batch</dt><dd>Not reported</dd></div>
+          <div><dt>Reranking</dt><dd>Not reported</dd></div>
+          <div><dt>Tokens and cost</dt><dd>Not reported by contract v1</dd></div>
+        </dl>
+      </div>
+    </section>
+  </div>
 
   <div class="row g-4">
     <section class="col-xl-4" aria-labelledby="runs-title">
@@ -47,6 +141,10 @@
         <div class="panel-header p-4">
           <p class="eyebrow mb-1">RECENT RUNS</p>
           <h2 class="h5 mb-0" id="runs-title">Select a trace</h2>
+          <p class="small text-secondary mb-0 mt-2">
+            <span id="run-count">—</span> shown · <span id="event-count">—</span> events retained ·
+            <span id="dropped-count">—</span> evicted
+          </p>
         </div>
         <div class="run-list p-3" id="run-list" aria-live="polite">
           <p class="text-secondary p-2 mb-0">Loading traces…</p>
@@ -58,7 +156,7 @@
       <div class="panel rounded-4 h-100">
         <div class="panel-header p-4 d-flex flex-wrap justify-content-between gap-3">
           <div>
-            <p class="eyebrow mb-1">EVENT TIMELINE</p>
+            <p class="eyebrow mb-1">DETAILED EVIDENCE</p>
             <h2 class="h5 mb-0" id="trace-title">No run selected</h2>
           </div>
           <span class="source-badge" id="trace-lifecycle">waiting</span>

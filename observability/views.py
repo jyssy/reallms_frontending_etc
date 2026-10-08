@@ -7,8 +7,9 @@ from django.views.decorators.http import require_GET
 
 from .activity import recent_events, record_event
 from .adapters import MCPUnavailableError, configuration_status, discover_tools
-from .contract import ENDPOINTS, TRACE_CONTRACT_VERSION
-from .traces import mock_model_snapshot, mock_trace_snapshot, trace_store
+from .contract import ENDPOINTS, TRACE_CONTRACT_VERSION, configured_executor_context
+from .storage import get_trace_store, storage_source
+from .traces import mock_model_snapshot, mock_trace_snapshot
 
 
 def _no_store(payload: dict, *, status: int = 200) -> JsonResponse:
@@ -48,7 +49,7 @@ def status_api(request):
                 "contract_version": TRACE_CONTRACT_VERSION,
                 "source": "synthetic_fixture"
                 if settings.OBSERVABILITY_MOCK_MODE
-                else "live_process",
+                else storage_source(),
                 "endpoints": ENDPOINTS,
             },
         }
@@ -89,11 +90,16 @@ def model_activity_api(request):
     if settings.OBSERVABILITY_MOCK_MODE:
         payload = mock_model_snapshot(settings.OBSERVABILITY_MODEL_CATALOG)
     else:
-        payload = trace_store.model_snapshot(settings.OBSERVABILITY_MODEL_CATALOG)
+        payload = get_trace_store().model_snapshot(settings.OBSERVABILITY_MODEL_CATALOG)
+    payload["executor"] = configured_executor_context(settings.OBSERVABILITY_EXECUTOR_LABEL)
     return _no_store(payload)
 
 
 @require_GET
 def run_traces_api(request):
-    payload = mock_trace_snapshot() if settings.OBSERVABILITY_MOCK_MODE else trace_store.snapshot()
+    payload = (
+        mock_trace_snapshot(settings.OBSERVABILITY_MODEL_CATALOG)
+        if settings.OBSERVABILITY_MOCK_MODE
+        else get_trace_store().snapshot(settings.OBSERVABILITY_MODEL_CATALOG)
+    )
     return _no_store(payload)

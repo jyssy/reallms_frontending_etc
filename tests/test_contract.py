@@ -2,7 +2,12 @@ import json
 
 import pytest
 
-from observability.contract import ContractError, parse_observed_result, parse_trace_event
+from observability.contract import (
+    ContractError,
+    configured_executor_context,
+    parse_observed_result,
+    parse_trace_event,
+)
 
 
 def valid_event(**overrides):
@@ -63,6 +68,7 @@ def test_result_projection_discards_content_paths_policy_and_raw_errors():
             "status": "success",
             "task_type": "coding",
             "model_roles": {
+                "router": "qwen2.5:1.5b",
                 "reviewer": "safe-model",
                 "judge": "bad model name with spaces",
             },
@@ -77,6 +83,19 @@ def test_result_projection_discards_content_paths_policy_and_raw_errors():
     assert result == {
         "status": "success",
         "task_type": "coding",
-        "model_roles": {"reviewer": "safe-model"},
+        "model_roles": {"router": "qwen2.5:1.5b", "reviewer": "safe-model"},
     }
     assert "forbidden-marker" not in json.dumps(result)
+
+
+def test_executor_context_is_configured_but_not_claimed_as_observed():
+    assert configured_executor_context("Codex") == {
+        "name": "Codex",
+        "state": "configured",
+        "scope": "external_client",
+    }
+    assert configured_executor_context("unsafe executor label") == {
+        "name": None,
+        "state": "not-reported",
+        "scope": "external_client",
+    }

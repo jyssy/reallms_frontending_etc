@@ -89,11 +89,18 @@ def test_observability_pages_render_navigation_and_accessible_states(client):
     assert b"not-reported" in models.content
     assert b'aria-live="polite"' in models.content
     assert runs.status_code == 200
-    assert b"Sanitized orchestration progress" in runs.content
+    assert b"Orchestration run observatory" in runs.content
+    assert b'id="workflow-trail"' in runs.content
+    assert b'id="handoff-map"' in runs.content
+    assert b'id="executor-state"' in runs.content
+    assert b'id="run-model-roster"' in runs.content
+    assert b'id="run-resources"' in runs.content
+    assert b"Tokens and cost" in runs.content
     assert b"No observed run is available" in runs.content
 
 
-def test_empty_observability_apis_are_bounded_and_not_cached(client):
+def test_empty_observability_apis_are_bounded_and_not_cached(client, settings):
+    settings.OBSERVABILITY_EXECUTOR_LABEL = "Codex"
     models = client.get(reverse("observability:model-activity-api"))
     runs = client.get(reverse("observability:run-traces-api"))
 
@@ -101,6 +108,11 @@ def test_empty_observability_apis_are_bounded_and_not_cached(client):
     assert models.headers["Cache-Control"] == "no-store"
     assert models.json()["source"] == "live_process"
     assert len(models.json()["models"]) == 5
+    assert models.json()["executor"] == {
+        "name": "Codex",
+        "state": "configured",
+        "scope": "external_client",
+    }
     assert runs.status_code == 200
     assert runs.headers["Cache-Control"] == "no-store"
     assert "Access-Control-Allow-Origin" not in runs.headers
@@ -111,17 +123,35 @@ def test_empty_observability_apis_are_bounded_and_not_cached(client):
 def test_mock_mode_is_visibly_synthetic(client, settings):
     settings.OBSERVABILITY_MOCK_MODE = True
     settings.OBSERVABILITY_MODEL_CATALOG = {"reviewer": "configured-reviewer"}
+    settings.OBSERVABILITY_EXECUTOR_LABEL = "Codex"
 
     models = client.get(reverse("observability:model-activity-api")).json()
     runs = client.get(reverse("observability:run-traces-api")).json()
 
     assert models["source"] == "synthetic_fixture"
     assert models["observed"] is False
+    assert models["executor"] == {
+        "name": "Codex",
+        "state": "configured",
+        "scope": "external_client",
+    }
     assert runs["source"] == "synthetic_fixture"
     assert runs["observed"] is False
     assert runs["runs"][0]["result"]["model_roles"] == {
-        "reviewer": "synthetic-reviewer"
+        "reviewer": "synthetic-reviewer",
+        "judge": "synthetic-judge",
     }
+    assert [stage["id"] for stage in runs["runs"][0]["workflow"]] == [
+        "route",
+        "retrieve",
+        "review",
+        "judge",
+        "revise",
+        "complete",
+    ]
+    assert runs["runs"][0]["summary"]["provider_attempts"] == 1
+    assert runs["runs"][0]["summary"]["retrieval"]["selected_count"] == 4
+    assert len(runs["runs"][0]["models"]) == 5
 
 
 def test_status_publishes_versioned_endpoint_contract_without_paths(client, settings, tmp_path):
@@ -133,3 +163,15 @@ def test_status_publishes_versioned_endpoint_contract_without_paths(client, sett
     assert payload["observability"]["contract_version"] == 1
     assert payload["observability"]["endpoints"]["runs"].endswith("/runs/")
     assert str(tmp_path) not in response.content.decode()
+
+
+def test_executor_label_is_configurable_without_claiming_observation(client, settings):
+    settings.OBSERVABILITY_EXECUTOR_LABEL = "Claude"
+
+    payload = client.get(reverse("observability:model-activity-api")).json()
+
+    assert payload["executor"] == {
+        "name": "Claude",
+        "state": "configured",
+        "scope": "external_client",
+    }

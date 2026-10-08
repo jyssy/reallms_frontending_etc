@@ -23,6 +23,58 @@ All observability responses use `Cache-Control: no-store`. Browser pages poll
 and replace their current snapshot, so reconnecting naturally resumes from the
 latest retained state without building an unbounded client-side history.
 
+## Ask Orchestrator workflow trail
+
+The run page makes the most recent retained run the primary visualization. Its
+six stages are derived deterministically from contract events:
+
+1. Route (`router`)
+2. Retrieve (`retrieval`, `embedding`, and `reranker`)
+3. Specialist (`specialist` / reviewer role)
+4. Judge (`judge`)
+5. Revision (`revision`)
+6. Complete (`run.completed`)
+
+The selected run opens with end-to-end status and elapsed time, observed model
+count, provider attempts/retries, and work classification. Its workflow shows
+relative duration marks alongside status, event count, purpose, and model
+attribution. A per-run model roster separates observed identities from
+configured expectations. An operational-evidence panel reports retrieval
+candidate/selection counts, context use, embedding batch size, reranking counts,
+provider activity, and reported phase time when those measurements exist.
+
+Token usage, cost, CPU, and memory are explicitly shown as `not reported`
+because contract v1 does not provide them. The UI never estimates those values.
+Reviewer and judge names are read from each sanitized structured orchestration
+result and marked `observed`. Model upgrades therefore appear automatically on
+the next retained call without a frontend code or configuration change. The
+frontend also accepts a safe `model_roles.router` value when the upstream result
+provides one; until then, the router can only be shown as a configured
+expectation. The visible model listings focus on router, reviewer, and judge.
+Embedding and reranking remain retrieval measurements when the trace reports
+them, but are not presented as model actors. Missing names remain `not
+reported`; the UI does not infer identity from provider type.
+
+Optional configured expectations are supplied entirely through server-side
+environment variables; no model identifiers are hardcoded in application
+settings. The router is expected to run through the local Ollama service, but
+the browser does not connect to Ollama directly. Observed identities take
+precedence over configured expectations, and both are shown when they differ.
+Synthetic fixture identities remain visibly synthetic rather than being
+relabeled as live observations.
+
+An actors-and-handoff map separates the observed Ask Orchestrator boundary from
+the external execution client. Set `REALMS_OBSERVABILITY_EXECUTOR=Codex` or use
+another safe label such as `Claude`. It is always displayed as
+`configured · external`: contract v1 does not observe repository edits or other
+executor activity after the advisory MCP result is returned.
+
+The upstream v1 trace contract does not currently report a safe model role or
+identifier per event, and the structured result currently reports reviewer and
+judge identities but not the router. The frontend is ready to accept a safe
+router identity when that result field becomes available and keeps configured
+and observed attribution visually distinct.
+
 ## Observed MCP integration
 
 `observability.adapters.observe_orchestrator()` calls the additive
@@ -63,9 +115,56 @@ including when progress arrives out of order. A `run.completed` event makes a
 run terminal. Otherwise it remains `in_progress`, which truthfully covers an
 active call, disconnect, timeout, cancellation, or partial/degraded stream.
 
-Retention is process-local and FIFO bounded to 24 runs, 128 events per run, and
-512 total events. Old events/runs are evicted and counted. Restarting Django
-clears all state; there is no database, export, analytics, or telemetry.
+By default retention is process-local and FIFO bounded to 24 runs, 128 events
+per run, and 512 total events. Old events/runs are evicted and counted, and a
+Django restart clears that default store.
+
+## Optional SQLite history and portable exports
+
+SQLite history is an explicit opt-in for a single local frontend instance. It
+uses Python's standard `sqlite3` module and does not enable Django ORM storage
+or require migrations. The database contains only the same allowlisted event
+fields and sanitized result/model attribution already permitted in browser
+responses. It never stores prompts, completions, source content, provider
+bodies, paths, policy text, environment values, or raw errors.
+
+Enable it with a deliberately chosen server-side path:
+
+```sh
+REALMS_OBSERVABILITY_STORAGE=sqlite \
+REALMS_OBSERVABILITY_SQLITE_PATH=/private/local/path/realms-observability.sqlite3 \
+uv run python manage.py runserver 127.0.0.1:8000
+```
+
+The defaults retain at most 500 runs for seven days, with at most 128 events
+per run. `REALMS_OBSERVABILITY_SQLITE_MAX_RUNS` and
+`REALMS_OBSERVABILITY_SQLITE_RETENTION_DAYS` can narrow or extend those bounds.
+The run API still returns no more than the newest 24 runs per response. SQLite
+files are created owner-readable/writable (`0600`), and the configured local
+path is never returned to the browser.
+
+With SQLite mode and its path configured, all four versioned observability
+tables can be exported in stable order:
+
+```sh
+# One portable JSON document with a manifest, row counts, and table checksums.
+uv run python manage.py observability_export \
+  --format json --output ./observability-export.json
+
+# A private directory of CSV tables plus manifest.json.
+uv run python manage.py observability_export \
+  --format csv --output ./observability-export
+
+# A consistent SQLite copy made through the SQLite backup API.
+uv run python manage.py observability_backup \
+  --output ./observability-backup.sqlite3
+```
+
+Each command refuses to replace its known outputs unless `--force` is passed.
+Exported files and backups are `0600`; CSV export directories are `0700`.
+Exports remain sensitive operational metadata because they include run timing
+and safe model labels, so store and share them accordingly. No telemetry or
+automatic export is enabled.
 
 ## Model activity states
 
