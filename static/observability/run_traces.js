@@ -57,6 +57,7 @@ let executorContext = { name: null, state: "not-reported", scope: "external_clie
 let traceSource = "live_process";
 let retainedRunCount = 0;
 let runOrdinalsById = new Map();
+let currentAnalytics = { role_performance: [], task_model_outcomes: [] };
 const timestampOptions = {
   hour: "numeric",
   minute: "2-digit",
@@ -254,6 +255,65 @@ function isSafeRun(run) {
   );
 }
 
+function isSafeMetricSummary(summary) {
+  const metricValue = (value) =>
+    value === null ||
+    (typeof value === "number" && Number.isFinite(value) && value >= 0 && value <= 2000000000);
+  return (
+    isPlainObject(summary) &&
+    metricValue(summary.latest) &&
+    metricValue(summary.median) &&
+    metricValue(summary.p25) &&
+    metricValue(summary.p75) &&
+    Number.isInteger(summary.sample_count) &&
+    summary.sample_count >= 0 &&
+    summary.sample_count <= 512
+  );
+}
+
+function isSafeAnalytics(analytics) {
+  return (
+    isPlainObject(analytics) &&
+    Array.isArray(analytics.role_performance) &&
+    analytics.role_performance.length <= 72 &&
+    analytics.role_performance.every(
+      (performance) =>
+        isPlainObject(performance) &&
+        visibleModelRoles.has(performance.role) &&
+        isSafeModelName(performance.model) &&
+        performance.model !== null &&
+        (performance.quantization === null ||
+          (typeof performance.quantization === "string" &&
+            /^[A-Za-z0-9][A-Za-z0-9._+\-]{0,31}$/.test(performance.quantization))) &&
+        Number.isInteger(performance.sample_count) &&
+        performance.sample_count >= 1 &&
+        performance.sample_count <= 512 &&
+        isSafeMetricSummary(performance.throughput_tps) &&
+        isSafeMetricSummary(performance.generation_duration_ms) &&
+        isSafeMetricSummary(performance.time_to_first_token_ms) &&
+        isSafeMetricSummary(performance.load_duration_ms) &&
+        [
+          performance.latest_input_tokens,
+          performance.latest_output_tokens,
+          performance.latest_context_window_tokens,
+        ].every((value) => value === null || isNullableCount(value)),
+    ) &&
+    Array.isArray(analytics.task_model_outcomes) &&
+    analytics.task_model_outcomes.length <= 24 &&
+    analytics.task_model_outcomes.every(
+      (path) =>
+        isPlainObject(path) &&
+        taskTypes.has(path.task_type) &&
+        isSafeModelName(path.reviewer_model) &&
+        path.reviewer_model !== null &&
+        resultStatuses.has(path.outcome) &&
+        Number.isInteger(path.count) &&
+        path.count >= 1 &&
+        path.count <= 24,
+    )
+  );
+}
+
 function formatDuration(duration) {
   if (duration === null) {
     return "Not reported";
@@ -284,6 +344,7 @@ function isSafePayload(payload) {
     isPlainObject(payload.retention) &&
     Number.isInteger(payload.retention.stored_events) &&
     Number.isInteger(payload.retention.dropped_events) &&
+    (payload.analytics === undefined || isSafeAnalytics(payload.analytics)) &&
     Array.isArray(payload.runs) &&
     payload.runs.length <= 24 &&
     payload.runs.every(isSafeRun)
@@ -350,6 +411,83 @@ function attributionLabel(model) {
   return `${model.role}: ${displayModelName(model)} · ${model.state}`;
 }
 
+function formatMetric(value, unit, digits = 0) {
+  return value === null ? "Not reported" : `${value.toFixed(digits)} ${unit}`;
+}
+
+function actorPerformance(run, role) {
+  const model = run.models.find((candidate) => candidate.role === role);
+  if (!model?.name || !["observed", "fallback"].includes(model.state)) {
+    return null;
+  }
+  const matches = currentAnalytics.role_performance.filter(
+    (performance) => performance.role === role && performance.model === model.name,
+  );
+  return matches.at(-1) || null;
+}
+
+function performanceRange(performance) {
+  const wrapper = document.createElement("div");
+  wrapper.className = "actor-performance";
+  const heading = document.createElement("p");
+  heading.className = "handoff-zone-label mb-2";
+  heading.textContent =
+    traceSource === "synthetic_fixture" ? "Demo performance" : "Retained performance";
+  wrapper.append(heading);
+
+  const throughput = performance?.throughput_tps;
+  if (!throughput?.sample_count) {
+    const unavailable = document.createElement("p");
+    unavailable.className = "small text-secondary mb-0";
+    unavailable.textContent = "Throughput not reported";
+    wrapper.append(unavailable);
+  } else {
+    const value = document.createElement("p");
+    value.className = "actor-performance-value mb-1";
+    value.textContent = formatMetric(throughput.latest, "tok/s", 1);
+    const detail = document.createElement("p");
+    detail.className = "small text-secondary mb-2";
+    detail.textContent = `Typical ${throughput.p25.toFixed(1)}–${throughput.p75.toFixed(1)} · median ${throughput.median.toFixed(1)} · n=${throughput.sample_count}`;
+
+    const maximum = Math.max(throughput.latest, throughput.p75, 1);
+    const position = (number) => `${Math.min(100, (number / maximum) * 100)}%`;
+    const track = document.createElement("div");
+    track.className = "performance-range-track";
+    track.setAttribute("role", "img");
+    track.setAttribute(
+      "aria-label",
+      `Throughput latest ${throughput.latest.toFixed(1)} tokens per second; typical range ${throughput.p25.toFixed(1)} to ${throughput.p75.toFixed(1)}; ${throughput.sample_count} samples`,
+    );
+    const band = document.createElement("span");
+    band.className = "performance-range-band";
+    band.style.left = position(throughput.p25);
+    band.style.width = position(Math.max(throughput.p75 - throughput.p25, maximum * 0.02));
+    const median = document.createElement("span");
+    median.className = "performance-range-median";
+    median.style.left = position(throughput.median);
+    const latest = document.createElement("span");
+    latest.className = "performance-range-latest";
+    latest.style.left = position(throughput.latest);
+    track.append(band, median, latest);
+    wrapper.append(value, detail, track);
+  }
+
+  const metrics = document.createElement("p");
+  metrics.className = "small text-secondary mt-2 mb-0";
+  const generation = performance?.generation_duration_ms?.median;
+  const ttft = performance?.time_to_first_token_ms?.median;
+  const details = [
+    `Generation median ${formatMetric(generation, "ms")}`,
+    `TTFT median ${formatMetric(ttft, "ms")}`,
+  ];
+  if (performance?.quantization) {
+    details.push(`Quantization ${performance.quantization}`);
+  }
+  metrics.textContent = details.join(" · ");
+  wrapper.append(metrics);
+  return wrapper;
+}
+
 function actorNode(run, { label, order, role, stageId }) {
   const item = document.createElement("li");
   item.className = "actor-node";
@@ -395,8 +533,61 @@ function actorNode(run, { label, order, role, stageId }) {
   } else {
     evidence.textContent = "Identity not reported";
   }
-  item.append(header, identity, evidence);
+  item.append(header, identity, evidence, performanceRange(actorPerformance(run, role)));
   return item;
+}
+
+function renderOutcomeFlow(analytics) {
+  const container = byId("task-model-flow");
+  container.replaceChildren();
+  const paths = analytics.task_model_outcomes;
+  if (!paths.length) {
+    const empty = document.createElement("p");
+    empty.className = "text-secondary mb-0";
+    empty.textContent =
+      traceSource === "synthetic_fixture"
+        ? "Demo fixture does not claim a model outcome path."
+        : "No retained run reports a task, reviewer model, and outcome together.";
+    container.append(empty);
+    return;
+  }
+  const maximum = Math.max(...paths.map((path) => path.count), 1);
+  paths.forEach((path) => {
+    const row = document.createElement("article");
+    row.className = "outcome-flow-row";
+    row.setAttribute(
+      "aria-label",
+      `${path.count} retained ${path.task_type} runs used reviewer ${path.reviewer_model} with outcome ${path.outcome}`,
+    );
+    const task = document.createElement("span");
+    task.className = "outcome-flow-node";
+    task.textContent = path.task_type;
+    const firstArrow = document.createElement("span");
+    firstArrow.className = "outcome-flow-arrow";
+    firstArrow.setAttribute("aria-hidden", "true");
+    firstArrow.textContent = "→";
+    const model = document.createElement("span");
+    model.className = "outcome-flow-node outcome-flow-model";
+    model.textContent = path.reviewer_model;
+    const secondArrow = document.createElement("span");
+    secondArrow.className = "outcome-flow-arrow";
+    secondArrow.setAttribute("aria-hidden", "true");
+    secondArrow.textContent = "→";
+    const outcome = document.createElement("span");
+    outcome.className = "outcome-flow-node";
+    outcome.textContent = path.outcome.replace("_", " ");
+    const count = document.createElement("span");
+    count.className = "outcome-flow-count";
+    count.textContent = `${path.count} run${path.count === 1 ? "" : "s"}`;
+    const bar = document.createElement("span");
+    bar.className = "outcome-flow-volume";
+    bar.setAttribute("aria-hidden", "true");
+    const fill = document.createElement("span");
+    fill.style.width = `${(path.count / maximum) * 100}%`;
+    bar.append(fill);
+    row.append(task, firstArrow, model, secondArrow, outcome, count, bar);
+    container.append(row);
+  });
 }
 
 function renderHandoffMap(run) {
@@ -705,7 +896,16 @@ function renderResources(run) {
       formatDuration(run.summary.reported_stage_duration_ms),
       `${run.summary.reported_stage_count} timed stages`,
     ),
-    resourceRow("Tokens and cost", "Not reported", "Not available in contract v1"),
+    resourceRow(
+      "Token throughput",
+      currentAnalytics.role_performance.some(
+        (performance) => performance.throughput_tps.sample_count > 0,
+      )
+        ? "Retained range available"
+        : "Not reported",
+      "Shown per actor only from explicit provider measurements",
+    ),
+    resourceRow("Cost", "Not reported", "Not available in contract v1"),
     resourceRow("CPU and memory", "Not reported", "Not available in contract v1"),
   );
 }
@@ -767,6 +967,7 @@ function renderEmpty() {
   emptyHandoff.className = "text-secondary mb-0";
   emptyHandoff.textContent = "Waiting for an observed run before drawing actor handoffs…";
   byId("handoff-map").replaceChildren(emptyHandoff);
+  renderOutcomeFlow(currentAnalytics);
   const emptyRoster = document.createElement("p");
   emptyRoster.className = "text-secondary mb-0";
   emptyRoster.textContent = "Waiting for model attribution…";
@@ -789,6 +990,10 @@ function renderEmpty() {
 
 function renderRuns(payload) {
   traceSource = payload.source;
+  currentAnalytics = payload.analytics || {
+    role_performance: [],
+    task_model_outcomes: [],
+  };
   retainedRunCount = payload.runs.length;
   runOrdinalsById = new Map(
     payload.runs.map((run, index) => [run.run_id, retainedRunCount - index]),
@@ -806,6 +1011,7 @@ function renderRuns(payload) {
   byId("run-count").textContent = String(payload.runs.length);
   byId("event-count").textContent = String(payload.retention.stored_events);
   byId("dropped-count").textContent = String(payload.retention.dropped_events);
+  renderOutcomeFlow(currentAnalytics);
 
   if (!payload.runs.some((run) => run.run_id === selectedRunId)) {
     selectedRunId = payload.runs[0]?.run_id || null;

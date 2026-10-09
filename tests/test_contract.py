@@ -44,6 +44,61 @@ def test_trace_parser_rebuilds_from_allowlist():
     assert "forbidden-marker" not in json.dumps(parsed)
 
 
+def test_trace_parser_accepts_bounded_provider_performance_metadata():
+    parsed = parse_trace_event(
+        valid_event(
+            metadata={
+                "provider": "local",
+                "operation": "routing",
+                "role": "router",
+                "model": "qwen2.5:1.5b",
+                "quantization": "Q4_K_M",
+                "input_tokens": 320,
+                "output_tokens": 24,
+                "generation_duration_ms": 600,
+                "time_to_first_token_ms": 120,
+                "load_duration_ms": 30,
+                "context_window_tokens": 32768,
+                "tokens_per_second": 40,
+            }
+        )
+    )
+
+    assert parsed["metadata"] == {
+        "provider": "local",
+        "operation": "routing",
+        "role": "router",
+        "model": "qwen2.5:1.5b",
+        "quantization": "Q4_K_M",
+        "input_tokens": 320,
+        "output_tokens": 24,
+        "generation_duration_ms": 600,
+        "time_to_first_token_ms": 120,
+        "load_duration_ms": 30,
+        "context_window_tokens": 32768,
+    }
+    assert "tokens_per_second" not in parsed["metadata"]
+
+
+@pytest.mark.parametrize(
+    ("key", "value"),
+    [
+        ("role", "embedding"),
+        ("model", "unsafe model name"),
+        ("quantization", "unsafe quantization"),
+        ("input_tokens", 2_000_001),
+        ("output_tokens", True),
+        ("generation_duration_ms", 86_400_001),
+        ("time_to_first_token_ms", -1),
+        ("context_window_tokens", "32768"),
+    ],
+)
+def test_trace_parser_discards_invalid_performance_metadata(key, value):
+    parsed = parse_trace_event(valid_event(metadata={key: value}))
+
+    assert parsed["metadata"] == {}
+
+
 @pytest.mark.parametrize(
     ("field", "value"),
     [

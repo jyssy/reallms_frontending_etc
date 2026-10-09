@@ -53,10 +53,14 @@ RESULT_STATUSES = frozenset(
     }
 )
 TASK_TYPES = frozenset({"coding", "general", "ops", "search"})
+MODEL_ROLES = ("router", "embedding", "reranker", "reviewer", "judge")
+ORCHESTRATION_ACTOR_ROLES = ("router", "reviewer", "judge")
+MODEL_STATES = frozenset({"configured", "observed", "skipped", "fallback", "not-reported"})
 
 _METADATA_ENUMS = {
     "operation": frozenset({"completion", "embedding", "reranking", "routing"}),
     "provider": frozenset({"local", "remote"}),
+    "role": frozenset(ORCHESTRATION_ACTOR_ROLES),
     "result_status": RESULT_STATUSES,
     "task_type": TASK_TYPES,
 }
@@ -80,12 +84,15 @@ _METADATA_INTEGERS = frozenset(
         "selected_count",
     }
 )
+_METADATA_TOKEN_INTEGERS = frozenset(
+    {"context_window_tokens", "input_tokens", "output_tokens"}
+)
+_METADATA_DURATION_INTEGERS = frozenset(
+    {"generation_duration_ms", "load_duration_ms", "time_to_first_token_ms"}
+)
 _SAFE_CODE = re.compile(r"[a-z][a-z0-9_]{0,63}").fullmatch
 _SAFE_MODEL = re.compile(r"[A-Za-z0-9][A-Za-z0-9._:/+\-]{0,127}").fullmatch
-
-MODEL_ROLES = ("router", "embedding", "reranker", "reviewer", "judge")
-ORCHESTRATION_ACTOR_ROLES = ("router", "reviewer", "judge")
-MODEL_STATES = frozenset({"configured", "observed", "skipped", "fallback", "not-reported"})
+_SAFE_QUANTIZATION = re.compile(r"[A-Za-z0-9][A-Za-z0-9._+\-]{0,31}").fullmatch
 
 ENDPOINTS = {
     "status": "/api/v1/status/",
@@ -132,7 +139,25 @@ def _safe_metadata(value: object) -> dict[str, str | int | bool]:
             safe[key] = item
         elif key in _METADATA_INTEGERS and _is_int(item) and 0 <= item <= 1_000_000:
             safe[key] = item
+        elif (
+            key in _METADATA_TOKEN_INTEGERS
+            and _is_int(item)
+            and 0 <= item <= 2_000_000
+        ):
+            safe[key] = item
+        elif (
+            key in _METADATA_DURATION_INTEGERS
+            and _is_int(item)
+            and 0 <= item <= 86_400_000
+        ):
+            safe[key] = item
         elif key in _METADATA_ENUMS and isinstance(item, str) and item in _METADATA_ENUMS[key]:
+            safe[key] = item
+        elif key == "model":
+            model = safe_model_name(item)
+            if model:
+                safe[key] = model
+        elif key == "quantization" and isinstance(item, str) and _SAFE_QUANTIZATION(item):
             safe[key] = item
         elif key == "code" and isinstance(item, str) and _SAFE_CODE(item):
             safe[key] = item

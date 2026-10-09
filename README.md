@@ -45,8 +45,12 @@ configured expectations. An operational-evidence panel reports retrieval
 candidate/selection counts, context use, embedding batch size, reranking counts,
 provider activity, and reported phase time when those measurements exist.
 
-Token usage, cost, CPU, and memory are explicitly shown as `not reported`
-because contract v1 does not provide them. The UI never estimates those values.
+Actor cards can also show a bounded retained throughput range, median generation
+time, median time to first token, and quantization when those values are
+explicitly reported by provider-attempt events. Throughput is calculated
+deterministically from output tokens and generation duration; it is never
+accepted as an opaque upstream claim. Cost, CPU, and memory remain `not
+reported`. The UI never estimates missing measurements.
 All rendered timestamps show America/New_York Eastern time (automatically EST
 or EDT as appropriate) alongside UTC.
 Reviewer and judge names are read from each sanitized structured orchestration
@@ -74,11 +78,38 @@ another safe label such as `Claude`. It is always displayed as
 `configured · external`: contract v1 does not observe repository edits or other
 executor activity after the advisory MCP result is returned.
 
-The upstream v1 trace contract does not currently report a safe model role or
-identifier per event, and the structured result currently reports reviewer and
-judge identities but not the router. The frontend is ready to accept a safe
-router identity when that result field becomes available and keeps configured
-and observed attribution visually distinct.
+Structured results may report router, reviewer, and judge identities. The run
+page also aggregates bounded retained paths as task class → observed reviewer
+model → result. Rows are included only when all three values were reported.
+
+Provider-level performance is an optional additive integration. The frontend
+accepts the following allowlisted `provider.attempt` metadata when the upstream
+orchestrator supplies it:
+
+```json
+{
+  "provider": "local",
+  "operation": "routing",
+  "role": "router",
+  "model": "qwen2.5:1.5b",
+  "quantization": "Q4_K_M",
+  "input_tokens": 320,
+  "output_tokens": 24,
+  "generation_duration_ms": 600,
+  "time_to_first_token_ms": 120,
+  "load_duration_ms": 30,
+  "context_window_tokens": 32768
+}
+```
+
+`role` must be `router`, `reviewer`, or `judge`; `model` and `quantization`
+must pass conservative label validation. Token counts are bounded at two
+million and duration measurements at 24 hours. Performance samples require an
+explicit role, model, and successful provider attempt. The frontend does not
+infer role from provider or operation, does not accept `tokens_per_second`, and
+does not mix measurements from different model or quantization identities.
+Until upstream emits these optional fields, actor performance remains visibly
+`not reported`.
 
 ## Observed MCP integration
 
@@ -86,7 +117,7 @@ and observed attribution visually distinct.
 `ask_orchestrator_observed` stdio MCP tool. Its progress callback accepts the
 upstream `TraceEventV1` messages, validates them at the Django boundary, and
 stores only the allowlisted projection. The structured result is reduced to
-status, task type, and reviewer/judge model attribution; draft, final answer,
+status, task type, and router/reviewer/judge model attribution; draft, final answer,
 paths, policy identifiers, warnings, component messages, and errors are
 discarded.
 

@@ -97,13 +97,14 @@ def test_observability_pages_render_navigation_and_accessible_states(client):
     assert b"Orchestration run observatory" in runs.content
     assert b'id="workflow-trail"' in runs.content
     assert b'id="handoff-map"' in runs.content
+    assert b'id="task-model-flow"' in runs.content
     assert b'id="executor-state"' in runs.content
     assert b'id="run-model-roster"' in runs.content
     assert b'id="run-resources"' in runs.content
     assert b'id="trace-id"' in runs.content
-    assert b"Tokens and cost" in runs.content
+    assert b"Token throughput" in runs.content
     assert "Time (Eastern · UTC)".encode() in runs.content
-    assert b"run_traces.js?v=6" in runs.content
+    assert b"run_traces.js?v=7" in runs.content
     assert b"No observed run is available" in runs.content
 
 
@@ -129,6 +130,10 @@ def test_empty_observability_apis_are_bounded_and_not_cached(client, settings):
     assert runs.headers["Cache-Control"] == "no-store"
     assert "Access-Control-Allow-Origin" not in runs.headers
     assert runs.json()["runs"] == []
+    assert runs.json()["analytics"] == {
+        "role_performance": [],
+        "task_model_outcomes": [],
+    }
     assert runs.json()["retention"]["max_total_events"] == 512
 
 

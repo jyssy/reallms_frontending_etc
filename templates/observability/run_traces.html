@@ -80,6 +80,19 @@
     </p>
   </section>
 
+  <section class="panel rounded-4 mb-4" aria-labelledby="outcome-flow-title">
+    <div class="panel-header p-4">
+      <p class="eyebrow mb-1">ROUTING OUTCOMES</p>
+      <h2 class="h5 mb-1" id="outcome-flow-title">Task class → reviewer model → result</h2>
+      <p class="small text-secondary mb-0">
+        Aggregated from bounded retained runs with all three values explicitly reported.
+      </p>
+    </div>
+    <div class="outcome-flow p-4" id="task-model-flow" aria-live="polite">
+      <p class="text-secondary mb-0">Waiting for retained outcome paths…</p>
+    </div>
+  </section>
+
   <section class="panel rounded-4 mb-4" aria-labelledby="workflow-title">
     <div class="panel-header p-4 d-flex flex-wrap justify-content-between gap-3">
       <div>
@@ -129,7 +142,8 @@
           <div><dt>Retrieval</dt><dd>Not reported</dd></div>
           <div><dt>Embedding batch</dt><dd>Not reported</dd></div>
           <div><dt>Reranking</dt><dd>Not reported</dd></div>
-          <div><dt>Tokens and cost</dt><dd>Not reported by contract v1</dd></div>
+          <div><dt>Token throughput</dt><dd>Not reported</dd></div>
+          <div><dt>Cost</dt><dd>Not reported by contract v1</dd></div>
         </dl>
       </div>
     </section>
@@ -176,5 +190,5 @@
   <p class="small text-secondary mt-3 mb-0" id="trace-refresh-status" aria-live="polite"></p>
 </main>
 
-<script src="{% static 'observability/run_traces.js' %}?v=6" defer></script>
+<script src="{% static 'observability/run_traces.js' %}?v=7" defer></script>
 {% endblock %}

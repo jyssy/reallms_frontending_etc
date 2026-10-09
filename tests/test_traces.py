@@ -319,3 +319,133 @@ def test_run_summary_uses_terminal_retrieval_flags_when_stage_omits_them():
 
     assert summary["retrieval"]["retrieval_used"] is False
     assert summary["retrieval"]["context_used"] is True
+
+
+def test_snapshot_aggregates_explicit_model_performance_and_outcome_paths():
+    store = TraceStore()
+    samples = [
+        (1, "coding", "success", 100, 2000, 300),
+        (2, "coding", "success", 120, 2000, 200),
+        (3, "search", "degraded_success", 140, 2000, 100),
+    ]
+    for index, task_type, status, output_tokens, generation_ms, ttft_ms in samples:
+        run_id = f"00000000-0000-4000-8000-{index:012d}"
+        store.add_event(
+            event(
+                1,
+                run_id=run_id,
+                metadata={
+                    "provider": "remote",
+                    "operation": "completion",
+                    "role": "reviewer",
+                    "model": "review-model",
+                    "quantization": "fp16",
+                    "input_tokens": 500,
+                    "output_tokens": output_tokens,
+                    "generation_duration_ms": generation_ms,
+                    "time_to_first_token_ms": ttft_ms,
+                    "load_duration_ms": 20,
+                    "context_window_tokens": 32768,
+                },
+            )
+        )
+        store.finish_run(
+            run_id,
+            {
+                "status": status,
+                "task_type": task_type,
+                "model_roles": {"reviewer": "review-model"},
+            },
+        )
+
+    analytics = store.snapshot()["analytics"]
+
+    assert analytics["role_performance"] == [
+        {
+            "role": "reviewer",
+            "model": "review-model",
+            "quantization": "fp16",
+            "sample_count": 3,
+            "throughput_tps": {
+                "latest": 70.0,
+                "median": 60.0,
+                "p25": 55.0,
+                "p75": 65.0,
+                "sample_count": 3,
+            },
+            "generation_duration_ms": {
+                "latest": 2000.0,
+                "median": 2000.0,
+                "p25": 2000.0,
+                "p75": 2000.0,
+                "sample_count": 3,
+            },
+            "time_to_first_token_ms": {
+                "latest": 100.0,
+                "median": 200.0,
+                "p25": 150.0,
+                "p75": 250.0,
+                "sample_count": 3,
+            },
+            "load_duration_ms": {
+                "latest": 20.0,
+                "median": 20.0,
+                "p25": 20.0,
+                "p75": 20.0,
+                "sample_count": 3,
+            },
+            "latest_input_tokens": 500,
+            "latest_output_tokens": 140,
+            "latest_context_window_tokens": 32768,
+        }
+    ]
+    assert analytics["task_model_outcomes"] == [
+        {
+            "task_type": "coding",
+            "reviewer_model": "review-model",
+            "outcome": "success",
+            "count": 2,
+        },
+        {
+            "task_type": "search",
+            "reviewer_model": "review-model",
+            "outcome": "degraded_success",
+            "count": 1,
+        },
+    ]
+
+
+def test_performance_analytics_require_explicit_role_model_and_success():
+    store = TraceStore()
+    for sequence, overrides in enumerate(
+        (
+            {"model": "review-model", "output_tokens": 10, "generation_duration_ms": 100},
+            {"role": "reviewer", "output_tokens": 10, "generation_duration_ms": 100},
+            {
+                "role": "reviewer",
+                "model": "review-model",
+                "output_tokens": 10,
+                "generation_duration_ms": 0,
+            },
+        ),
+        start=1,
+    ):
+        store.add_event(event(sequence, metadata=overrides))
+    store.add_event(
+        event(
+            4,
+            status="failed",
+            metadata={
+                "role": "reviewer",
+                "model": "review-model",
+                "output_tokens": 10,
+                "generation_duration_ms": 100,
+            },
+        )
+    )
+
+    performance = store.snapshot()["analytics"]["role_performance"]
+
+    assert len(performance) == 1
+    assert performance[0]["sample_count"] == 1
+    assert performance[0]["throughput_tps"]["sample_count"] == 0

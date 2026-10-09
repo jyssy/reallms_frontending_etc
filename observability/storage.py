@@ -26,7 +26,13 @@ from .contract import (
     parse_trace_event,
     safe_model_name,
 )
-from .traces import MAX_EVENTS_PER_RUN, MAX_RUNS, TraceStore, trace_store
+from .traces import (
+    MAX_EVENTS_PER_RUN,
+    MAX_RUNS,
+    TraceStore,
+    _observability_analytics,
+    trace_store,
+)
 
 SCHEMA_VERSION = 1
 EXPORT_VERSION = 1
@@ -514,6 +520,7 @@ class SQLiteTraceStore:
                 "dropped_events": 0,
                 "dropped_events_observed": False,
             },
+            "analytics": _observability_analytics(public_runs),
             "runs": public_runs,
         }
 

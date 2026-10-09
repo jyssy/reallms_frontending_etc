@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from collections import OrderedDict
+from collections import Counter, OrderedDict
 from copy import deepcopy
 from dataclasses import dataclass, field
 from threading import Lock
@@ -17,6 +17,7 @@ from .contract import (
 MAX_RUNS = 24
 MAX_EVENTS_PER_RUN = 128
 MAX_TOTAL_EVENTS = 512
+MAX_PERFORMANCE_GROUPS = MAX_RUNS * len(ORCHESTRATION_ACTOR_ROLES)
 
 _ROLE_COMPONENTS = {
     "router": frozenset({"router"}),
@@ -149,6 +150,7 @@ class TraceStore:
                     "stored_events": event_count,
                     "dropped_events": self._dropped_events,
                 },
+                "analytics": _observability_analytics(runs),
                 "runs": runs,
             }
 
@@ -266,6 +268,130 @@ class TraceStore:
 
 
 trace_store = TraceStore()
+
+
+def _rounded_metric(value: float | int) -> float:
+    return round(float(value), 2)
+
+
+def _percentile(values: list[float], fraction: float) -> float | None:
+    if not values:
+        return None
+    ordered = sorted(values)
+    position = (len(ordered) - 1) * fraction
+    lower = int(position)
+    upper = min(lower + 1, len(ordered) - 1)
+    weight = position - lower
+    return _rounded_metric(ordered[lower] * (1 - weight) + ordered[upper] * weight)
+
+
+def _metric_summary(samples: list[dict[str, Any]], field: str) -> dict[str, Any]:
+    measured = [sample for sample in samples if sample.get(field) is not None]
+    values = [float(sample[field]) for sample in measured]
+    return {
+        "latest": _rounded_metric(measured[-1][field]) if measured else None,
+        "median": _percentile(values, 0.5),
+        "p25": _percentile(values, 0.25),
+        "p75": _percentile(values, 0.75),
+        "sample_count": len(values),
+    }
+
+
+def _performance_sample(event: dict[str, Any]) -> dict[str, Any] | None:
+    metadata = event["metadata"]
+    role = metadata.get("role")
+    model = metadata.get("model")
+    if (
+        event["event_type"] != "provider.attempt"
+        or event["status"] != "success"
+        or role not in ORCHESTRATION_ACTOR_ROLES
+        or not isinstance(model, str)
+    ):
+        return None
+    generation_duration = metadata.get("generation_duration_ms")
+    output_tokens = metadata.get("output_tokens")
+    throughput = None
+    if (
+        isinstance(output_tokens, int)
+        and isinstance(generation_duration, int)
+        and generation_duration > 0
+    ):
+        throughput = output_tokens * 1000 / generation_duration
+    return {
+        "role": role,
+        "model": model,
+        "quantization": metadata.get("quantization"),
+        "throughput_tps": throughput,
+        "generation_duration_ms": generation_duration,
+        "time_to_first_token_ms": metadata.get("time_to_first_token_ms"),
+        "load_duration_ms": metadata.get("load_duration_ms"),
+        "input_tokens": metadata.get("input_tokens"),
+        "output_tokens": output_tokens,
+        "context_window_tokens": metadata.get("context_window_tokens"),
+    }
+
+
+def _observability_analytics(runs: list[dict[str, Any]]) -> dict[str, Any]:
+    grouped_samples: OrderedDict[tuple[str, str, str | None], list[dict[str, Any]]] = (
+        OrderedDict()
+    )
+    for run in reversed(runs):
+        for event in run["events"]:
+            sample = _performance_sample(event)
+            if sample is None:
+                continue
+            key = (sample["role"], sample["model"], sample["quantization"])
+            grouped_samples.setdefault(key, []).append(sample)
+            grouped_samples.move_to_end(key)
+
+    performance = []
+    for (role, model, quantization), samples in list(grouped_samples.items())[
+        -MAX_PERFORMANCE_GROUPS:
+    ]:
+        latest = samples[-1]
+        performance.append(
+            {
+                "role": role,
+                "model": model,
+                "quantization": quantization,
+                "sample_count": len(samples),
+                "throughput_tps": _metric_summary(samples, "throughput_tps"),
+                "generation_duration_ms": _metric_summary(
+                    samples, "generation_duration_ms"
+                ),
+                "time_to_first_token_ms": _metric_summary(
+                    samples, "time_to_first_token_ms"
+                ),
+                "load_duration_ms": _metric_summary(samples, "load_duration_ms"),
+                "latest_input_tokens": latest["input_tokens"],
+                "latest_output_tokens": latest["output_tokens"],
+                "latest_context_window_tokens": latest["context_window_tokens"],
+            }
+        )
+
+    outcome_counts = Counter()
+    for run in runs:
+        result = run.get("result") or {}
+        task_type = result.get("task_type")
+        reviewer = result.get("model_roles", {}).get("reviewer")
+        outcome = result.get("status")
+        if task_type and reviewer and outcome:
+            outcome_counts[(task_type, reviewer, outcome)] += 1
+    outcomes = [
+        {
+            "task_type": task_type,
+            "reviewer_model": reviewer_model,
+            "outcome": outcome,
+            "count": count,
+        }
+        for (task_type, reviewer_model, outcome), count in sorted(
+            outcome_counts.items()
+        )
+    ]
+    return {
+        "role_performance": performance,
+        "task_model_outcomes": outcomes,
+    }
 
 
 def _stage_status(events: list[dict[str, Any]], *, complete: bool) -> str:

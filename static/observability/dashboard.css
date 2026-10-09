@@ -242,6 +242,104 @@ header {
   overflow-wrap: anywhere;
 }
 
+.actor-performance {
+  margin-top: 0.9rem;
+  padding-top: 0.8rem;
+  border-top: 1px solid var(--realm-border);
+}
+
+.actor-performance-value {
+  color: var(--realm-cyan);
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-size: 1rem;
+}
+
+.performance-range-track {
+  position: relative;
+  height: 0.55rem;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.07);
+}
+
+.performance-range-band,
+.performance-range-median,
+.performance-range-latest {
+  position: absolute;
+  display: block;
+}
+
+.performance-range-band {
+  top: 0;
+  height: 100%;
+  min-width: 0.25rem;
+  border-radius: 999px;
+  background: rgba(84, 214, 209, 0.45);
+}
+
+.performance-range-median {
+  top: -0.2rem;
+  width: 2px;
+  height: 0.95rem;
+  background: var(--realm-violet);
+  transform: translateX(-1px);
+}
+
+.performance-range-latest {
+  top: 50%;
+  width: 0.65rem;
+  height: 0.65rem;
+  border-radius: 50%;
+  background: var(--realm-cyan);
+  transform: translate(-50%, -50%);
+}
+
+.outcome-flow {
+  display: grid;
+  gap: 0.7rem;
+}
+
+.outcome-flow-row {
+  display: grid;
+  min-width: 0;
+  align-items: center;
+  gap: 0.65rem;
+  grid-template-columns: minmax(6rem, 0.7fr) auto minmax(10rem, 1.4fr) auto minmax(8rem, 1fr) minmax(4.5rem, auto);
+}
+
+.outcome-flow-node {
+  min-width: 0;
+  padding: 0.55rem 0.7rem;
+  border-radius: 0.5rem;
+  background: rgba(255, 255, 255, 0.035);
+  overflow-wrap: anywhere;
+}
+
+.outcome-flow-model {
+  color: var(--realm-cyan);
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+}
+
+.outcome-flow-arrow,
+.outcome-flow-count {
+  color: #8b969f;
+  text-align: center;
+}
+
+.outcome-flow-volume {
+  height: 0.25rem;
+  overflow: hidden;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.07);
+  grid-column: 1 / -1;
+}
+
+.outcome-flow-volume > span {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, var(--realm-cyan), var(--realm-violet));
+}
+
 .handoff-connector {
   display: grid;
   min-width: 0;
@@ -630,6 +728,18 @@ code {
     right: 50%;
     bottom: -0.8rem;
     transform: translate(50%, 50%) rotate(90deg);
+  }
+
+  .outcome-flow-row {
+    grid-template-columns: 1fr;
+  }
+
+  .outcome-flow-arrow {
+    transform: rotate(90deg);
+  }
+
+  .outcome-flow-count {
+    text-align: left;
   }
 
   .run-overview {
