@@ -170,6 +170,10 @@ Enable it with a deliberately chosen server-side path:
 REALMS_OBSERVABILITY_STORAGE=sqlite \
 REALMS_OBSERVABILITY_SQLITE_PATH=/private/local/path/realms-observability.sqlite3 \
 uv run python manage.py runserver 127.0.0.1:8000
+# to kill port 8000
+lsof -ti :8000 | xargs kill
+# or...
+Ctrl+C
 ```
 
 The defaults retain at most 500 runs for seven days, with at most 128 events

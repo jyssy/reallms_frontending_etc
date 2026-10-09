@@ -150,7 +150,7 @@ class TraceStore:
                     "stored_events": event_count,
                     "dropped_events": self._dropped_events,
                 },
-                "analytics": _observability_analytics(runs),
+                "analytics": build_observability_analytics(runs),
                 "runs": runs,
             }
 
@@ -303,6 +303,7 @@ def _performance_sample(event: dict[str, Any]) -> dict[str, Any] | None:
     model = metadata.get("model")
     if (
         event["event_type"] != "provider.attempt"
+        or event["component"] != "provider"
         or event["status"] != "success"
         or role not in ORCHESTRATION_ACTOR_ROLES
         or not isinstance(model, str)
@@ -331,7 +332,7 @@ def _performance_sample(event: dict[str, Any]) -> dict[str, Any] | None:
     }
 
 
-def _observability_analytics(runs: list[dict[str, Any]]) -> dict[str, Any]:
+def build_observability_analytics(runs: list[dict[str, Any]]) -> dict[str, Any]:
     grouped_samples: OrderedDict[tuple[str, str, str | None], list[dict[str, Any]]] = (
         OrderedDict()
     )

@@ -30,7 +30,7 @@ from .traces import (
     MAX_EVENTS_PER_RUN,
     MAX_RUNS,
     TraceStore,
-    _observability_analytics,
+    build_observability_analytics,
     trace_store,
 )
 
@@ -520,7 +520,7 @@ class SQLiteTraceStore:
                 "dropped_events": 0,
                 "dropped_events_observed": False,
             },
-            "analytics": _observability_analytics(public_runs),
+            "analytics": build_observability_analytics(public_runs),
             "runs": public_runs,
         }
 

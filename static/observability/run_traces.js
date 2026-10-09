@@ -450,7 +450,7 @@ function performanceRange(performance) {
     detail.textContent = `Typical ${throughput.p25.toFixed(1)}–${throughput.p75.toFixed(1)} · median ${throughput.median.toFixed(1)} · n=${throughput.sample_count}`;
 
     const maximum = Math.max(throughput.latest, throughput.p75, 1);
-    const position = (number) => `${Math.min(100, (number / maximum) * 100)}%`;
+    const position = (number) => `${Math.min(98, (number / maximum) * 98)}%`;
     const track = document.createElement("div");
     track.className = "performance-range-track";
     track.setAttribute("role", "img");

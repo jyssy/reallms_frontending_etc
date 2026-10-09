@@ -109,6 +109,55 @@ def test_sqlite_store_keeps_browser_snapshot_bounded_to_24_runs(tmp_path):
     assert snapshot["retention"]["dropped_events_observed"] is False
 
 
+def test_sqlite_snapshot_projects_sanitized_performance_without_schema_changes(tmp_path):
+    path = tmp_path / "history.sqlite3"
+    store = make_store(path)
+    run_id = "00000000-0000-4000-8000-000000000001"
+    store.add_event(
+        event(
+            1,
+            run_id=run_id,
+            metadata={
+                "provider": "local",
+                "operation": "routing",
+                "role": "router",
+                "model": "qwen2.5:1.5b",
+                "quantization": "Q4_K_M",
+                "input_tokens": 100,
+                "output_tokens": 20,
+                "generation_duration_ms": 500,
+                "time_to_first_token_ms": 80,
+            },
+        )
+    )
+    store.finish_run(
+        run_id,
+        {
+            "status": "success",
+            "task_type": "coding",
+            "model_roles": {"router": "qwen2.5:1.5b", "reviewer": "review-model"},
+        },
+    )
+
+    snapshot = make_store(path).snapshot()
+
+    assert snapshot["analytics"]["role_performance"][0]["throughput_tps"] == {
+        "latest": 40.0,
+        "median": 40.0,
+        "p25": 40.0,
+        "p75": 40.0,
+        "sample_count": 1,
+    }
+    assert snapshot["analytics"]["task_model_outcomes"] == [
+        {
+            "task_type": "coding",
+            "reviewer_model": "review-model",
+            "outcome": "success",
+            "count": 1,
+        }
+    ]
+
+
 @pytest.fixture
 def sqlite_settings(tmp_path):
     database = tmp_path / "history.sqlite3"
