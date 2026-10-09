@@ -1,4 +1,5 @@
 import hashlib
+import io
 import json
 import sqlite3
 from pathlib import Path
@@ -205,3 +206,128 @@ def test_commands_require_explicit_sqlite_mode(tmp_path):
                 format="json",
                 output=str(tmp_path / "unused.json"),
             )
+        with pytest.raises(CommandError):
+            call_command("observability_status")
+        with pytest.raises(CommandError):
+            call_command("observability_prune")
+
+
+@pytest.fixture
+def maintenance_sqlite_settings(tmp_path):
+    database = tmp_path / "maintenance.sqlite3"
+    builder = SQLiteTraceStore(
+        database,
+        max_runs=10,
+        retention_days=3650,
+        max_events_per_run=200,
+    )
+    run_ids = [f"00000000-0000-4000-8000-{index:012d}" for index in range(1, 5)]
+    for run_id in run_ids[:3]:
+        builder.add_event(event(1, run_id=run_id))
+    for sequence in range(1, 131):
+        builder.add_event(
+            event(
+                sequence,
+                run_id=run_ids[3],
+                timestamp="2026-09-24T12:00:00+00:00",
+            )
+        )
+    with sqlite3.connect(database) as connection:
+        connection.execute(
+            "UPDATE observed_runs SET last_seen_at = ? WHERE run_id = ?",
+            ("2000-01-01T00:00:00+00:00", run_ids[0]),
+        )
+    with override_settings(
+        OBSERVABILITY_STORAGE_BACKEND="sqlite",
+        OBSERVABILITY_SQLITE_PATH=str(database),
+        OBSERVABILITY_SQLITE_MAX_RUNS=2,
+        OBSERVABILITY_SQLITE_RETENTION_DAYS=7,
+    ):
+        yield database
+
+
+def test_status_command_reports_health_without_exposing_database_path(
+    maintenance_sqlite_settings,
+):
+    output = io.StringIO()
+
+    call_command("observability_status", stdout=output)
+
+    rendered = output.getvalue()
+    assert "SQLite observability status: healthy" in rendered
+    assert "observed_runs: 4" in rendered
+    assert "Runs eligible for pruning: 2" in rendered
+    assert str(maintenance_sqlite_settings) not in rendered
+
+
+def test_status_command_supports_machine_readable_output(maintenance_sqlite_settings):
+    output = io.StringIO()
+
+    call_command("observability_status", json=True, stdout=output)
+
+    payload = json.loads(output.getvalue())
+    assert payload["healthy"] is True
+    assert payload["schema_version"] == SCHEMA_VERSION
+    assert payload["table_counts"]["observed_runs"] == 4
+    assert payload["table_counts"]["trace_events"] == 133
+    assert payload["retention"]["candidate_runs"] == 2
+    assert payload["retention"]["candidate_events"] == 4
+    assert "path" not in payload
+
+
+def test_prune_command_is_a_non_mutating_dry_run_by_default(
+    maintenance_sqlite_settings,
+):
+    output = io.StringIO()
+
+    call_command("observability_prune", stdout=output)
+
+    with sqlite3.connect(maintenance_sqlite_settings) as connection:
+        run_count = connection.execute("SELECT COUNT(*) FROM observed_runs").fetchone()[0]
+        event_count = connection.execute("SELECT COUNT(*) FROM trace_events").fetchone()[0]
+    assert run_count == 4
+    assert event_count == 133
+    assert "SQLite observability retention: dry run" in output.getvalue()
+    assert "No rows changed" in output.getvalue()
+
+
+def test_prune_command_requires_confirm_and_applies_configured_bounds(
+    maintenance_sqlite_settings,
+):
+    output = io.StringIO()
+
+    call_command("observability_prune", confirm=True, json=True, stdout=output)
+
+    payload = json.loads(output.getvalue())
+    assert payload["applied"] is True
+    assert payload["candidate_runs"] == 2
+    assert payload["candidate_events"] == 4
+    with sqlite3.connect(maintenance_sqlite_settings) as connection:
+        assert connection.execute("SELECT COUNT(*) FROM observed_runs").fetchone()[0] == 2
+        assert connection.execute("SELECT COUNT(*) FROM trace_events").fetchone()[0] == 129
+        assert (
+            connection.execute(
+                "SELECT MAX(event_count) FROM ("
+                "SELECT COUNT(*) AS event_count FROM trace_events GROUP BY run_id"
+                ")"
+            ).fetchone()[0]
+            == 128
+        )
+
+
+def test_management_commands_refuse_configured_symbolic_link(tmp_path):
+    database = tmp_path / "history.sqlite3"
+    make_store(database)
+    link = tmp_path / "history-link.sqlite3"
+    link.symlink_to(database)
+
+    with override_settings(
+        OBSERVABILITY_STORAGE_BACKEND="sqlite",
+        OBSERVABILITY_SQLITE_PATH=str(link),
+        OBSERVABILITY_SQLITE_MAX_RUNS=5,
+        OBSERVABILITY_SQLITE_RETENTION_DAYS=7,
+    ):
+        with pytest.raises(CommandError):
+            call_command("observability_status")
+        with pytest.raises(CommandError):
+            call_command("observability_prune", confirm=True)

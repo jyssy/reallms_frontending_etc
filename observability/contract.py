@@ -84,6 +84,7 @@ _SAFE_CODE = re.compile(r"[a-z][a-z0-9_]{0,63}").fullmatch
 _SAFE_MODEL = re.compile(r"[A-Za-z0-9][A-Za-z0-9._:/+\-]{0,127}").fullmatch
 
 MODEL_ROLES = ("router", "embedding", "reranker", "reviewer", "judge")
+ORCHESTRATION_ACTOR_ROLES = ("router", "reviewer", "judge")
 MODEL_STATES = frozenset({"configured", "observed", "skipped", "fallback", "not-reported"})
 
 ENDPOINTS = {

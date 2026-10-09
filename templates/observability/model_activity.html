@@ -50,7 +50,7 @@
     </div>
     <div class="table-responsive p-4">
       <table class="table table-dark table-borderless align-middle mb-0">
-        <thead><tr><th>Role</th><th>Configured</th><th>Observed</th><th>State</th><th>Events</th></tr></thead>
+        <thead><tr><th>Actor</th><th>Frontend expectation</th><th>Observed from captured runs</th><th>Evidence</th><th>Component events</th></tr></thead>
         <tbody id="model-activity-body" aria-live="polite">
           <tr><td colspan="5" class="text-secondary">Loading model activity…</td></tr>
         </tbody>
@@ -70,5 +70,5 @@
   <p class="small text-secondary mt-3 mb-0" id="model-refresh-status" aria-live="polite"></p>
 </main>
 
-<script src="{% static 'observability/model_activity.js' %}" defer></script>
+<script src="{% static 'observability/model_activity.js' %}?v=6" defer></script>
 {% endblock %}

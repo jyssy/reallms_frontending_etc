@@ -1,6 +1,28 @@
 const modelEndpoint = "/api/v1/observability/models/";
 const byId = (id) => document.getElementById(id);
 const visibleModelRoles = new Set(["router", "reviewer", "judge"]);
+const timestampOptions = {
+  hour: "numeric",
+  minute: "2-digit",
+  second: "2-digit",
+  timeZoneName: "short",
+};
+
+function formatTimestamp(value) {
+  const date = value instanceof Date ? value : new Date(value);
+  if (Number.isNaN(date.getTime())) {
+    return "—";
+  }
+  const eastern = new Intl.DateTimeFormat("en-US", {
+    ...timestampOptions,
+    timeZone: "America/New_York",
+  }).format(date);
+  const utc = new Intl.DateTimeFormat("en-US", {
+    ...timestampOptions,
+    timeZone: "UTC",
+  }).format(date);
+  return `${eastern} · ${utc}`;
+}
 
 async function fetchModelActivity() {
   const response = await fetch(modelEndpoint, {
@@ -43,24 +65,44 @@ function renderModels(payload) {
       role.scope = "row";
       role.textContent = labelRole(model.role);
       const configured = document.createElement("td");
-      configured.textContent = model.configured_model || "Not configured";
+      configured.textContent = model.configured_model || "Not supplied to this frontend";
       const observed = document.createElement("td");
       observed.textContent =
-        payload.source === "synthetic_fixture" && model.observed_models.length
+        payload.source === "synthetic_fixture"
           ? "Demo placeholder — no live model ran"
           : model.observed_models.length
             ? model.observed_models.join(", ")
-            : "No name reported";
+            : model.event_count > 0
+              ? "Activity observed · identity not reported"
+              : "Not observed by this frontend";
       const states = document.createElement("td");
       states.className = "state-cell";
-      if (model.states.length) {
+      if (payload.source === "synthetic_fixture") {
+        if (model.configured_model) {
+          states.append(statePill("configured"));
+        }
+        states.append(statePill("not-reported"));
+        states.lastElementChild.textContent = "demo only";
+      } else if (model.event_count > 0 && !model.observed_models.length) {
+        if (model.configured_model) {
+          states.append(statePill("configured"));
+        }
+        const activity = statePill("observed");
+        activity.textContent = "activity observed";
+        const identity = statePill("not-reported");
+        identity.textContent = "identity not reported";
+        states.append(activity, identity);
+      } else if (model.states.length) {
         model.states.forEach((state) => states.append(statePill(state)));
       } else {
         states.textContent = "No evidence";
         states.classList.add("text-secondary");
       }
       const count = document.createElement("td");
-      count.textContent = String(model.event_count);
+      count.textContent =
+        payload.source === "synthetic_fixture"
+          ? `demo · ${model.event_count}`
+          : String(model.event_count);
       row.append(role, configured, observed, states, count);
       body.append(row);
     });
@@ -84,7 +126,7 @@ function renderModels(payload) {
     column.append(card);
     cards.append(column);
   });
-  byId("model-refresh-status").textContent = `Updated ${new Date().toLocaleTimeString()}`;
+  byId("model-refresh-status").textContent = `Updated ${formatTimestamp(new Date())}`;
 }
 
 async function refreshModels() {

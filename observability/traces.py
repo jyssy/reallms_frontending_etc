@@ -8,7 +8,11 @@ from dataclasses import dataclass, field
 from threading import Lock
 from typing import Any
 
-from .contract import MODEL_ROLES, configured_model_catalog, parse_observed_result
+from .contract import (
+    ORCHESTRATION_ACTOR_ROLES,
+    configured_model_catalog,
+    parse_observed_result,
+)
 
 MAX_RUNS = 24
 MAX_EVENTS_PER_RUN = 128
@@ -154,7 +158,7 @@ class TraceStore:
         events = [event for run in trace["runs"] for event in run["events"]]
         results = [run["result"] for run in trace["runs"] if run["result"]]
         models = []
-        for role in MODEL_ROLES:
+        for role in ORCHESTRATION_ACTOR_ROLES:
             role_events = [
                 event for event in events if event["component"] in _ROLE_COMPONENTS[role]
             ]
@@ -310,7 +314,7 @@ def _run_model_roster(
     catalog: dict[str, str],
 ) -> list[dict[str, Any]]:
     roster = []
-    for role in MODEL_ROLES:
+    for role in ORCHESTRATION_ACTOR_ROLES:
         role_events = [
             event for event in events if event["component"] in _ROLE_COMPONENTS[role]
         ]
@@ -358,6 +362,7 @@ def _run_summary(
         }
     )
     retrieval_metadata = retrieval["metadata"] if retrieval else {}
+    terminal_metadata = terminal["metadata"] if terminal else {}
     embedding_metadata = embedding["metadata"] if embedding else {}
     reranking_metadata = reranking["metadata"] if reranking else {}
     return {
@@ -375,8 +380,12 @@ def _run_summary(
         "providers": providers,
         "fallback": any(event["metadata"].get("fallback") is True for event in events),
         "retrieval": {
-            "retrieval_used": retrieval_metadata.get("retrieval_used"),
-            "context_used": retrieval_metadata.get("context_used"),
+            "retrieval_used": retrieval_metadata.get(
+                "retrieval_used", terminal_metadata.get("retrieval_used")
+            ),
+            "context_used": retrieval_metadata.get(
+                "context_used", terminal_metadata.get("context_used")
+            ),
             "candidate_count": retrieval_metadata.get("candidate_count"),
             "selected_count": retrieval_metadata.get("selected_count"),
         },
@@ -566,10 +575,7 @@ def mock_trace_snapshot(configured: object = None) -> dict[str, Any]:
         {
             "status": "degraded_success",
             "task_type": "coding",
-            "model_roles": {
-                "reviewer": "synthetic-reviewer",
-                "judge": "synthetic-judge",
-            },
+            "model_roles": {},
         },
     )
     snapshot = store.snapshot(configured)

@@ -1,10 +1,80 @@
 const endpoints = {
   activity: "/api/v1/activity/",
+  models: "/api/v1/observability/models/",
   status: "/api/v1/status/",
   tools: "/api/v1/tools/",
 };
 
 const byId = (id) => document.getElementById(id);
+const actorRoles = new Set(["router", "reviewer", "judge"]);
+const modelStates = new Set(["configured", "observed", "skipped", "fallback", "not-reported"]);
+const actorPurposes = {
+  router: "Classifies the request and selects the workflow.",
+  reviewer: "Produces the role-specific reviewed result.",
+  judge: "Evaluates the result and decides whether revision is needed.",
+};
+const timestampOptions = {
+  hour: "numeric",
+  minute: "2-digit",
+  second: "2-digit",
+  timeZoneName: "short",
+};
+
+function formatTimestamp(value, includeDate = false) {
+  const date = value instanceof Date ? value : new Date(value);
+  if (Number.isNaN(date.getTime())) {
+    return "—";
+  }
+  const options = includeDate
+    ? { ...timestampOptions, year: "numeric", month: "short", day: "numeric" }
+    : timestampOptions;
+  const eastern = new Intl.DateTimeFormat("en-US", {
+    ...options,
+    timeZone: "America/New_York",
+  }).format(date);
+  const utc = new Intl.DateTimeFormat("en-US", {
+    ...options,
+    timeZone: "UTC",
+  }).format(date);
+  return `${eastern} · ${utc}`;
+}
+
+function isPlainObject(value) {
+  return value !== null && typeof value === "object" && !Array.isArray(value);
+}
+
+function isSafeModelName(value) {
+  return (
+    value === null ||
+    (typeof value === "string" && /^[A-Za-z0-9][A-Za-z0-9._:/+\-]{0,127}$/.test(value))
+  );
+}
+
+function isSafeModelActivity(payload) {
+  return (
+    isPlainObject(payload) &&
+    payload.contract_version === 1 &&
+    ["live_process", "sqlite_history", "synthetic_fixture"].includes(payload.source) &&
+    typeof payload.observed === "boolean" &&
+    Array.isArray(payload.models) &&
+    payload.models.length === actorRoles.size &&
+    new Set(payload.models.map((model) => model.role)).size === actorRoles.size &&
+    payload.models.every(
+      (model) =>
+        isPlainObject(model) &&
+        actorRoles.has(model.role) &&
+        isSafeModelName(model.configured_model) &&
+        Array.isArray(model.observed_models) &&
+        model.observed_models.length <= 24 &&
+        model.observed_models.every((name) => name !== null && isSafeModelName(name)) &&
+        Array.isArray(model.states) &&
+        model.states.every((state) => modelStates.has(state)) &&
+        Number.isInteger(model.event_count) &&
+        model.event_count >= 0 &&
+        model.event_count <= 512,
+    )
+  );
+}
 
 async function fetchJson(url, timeoutMs = 20000) {
   const controller = new AbortController();
@@ -27,7 +97,6 @@ async function fetchJson(url, timeoutMs = 20000) {
 }
 
 function renderDiscovery(discovery) {
-  byId("model-activity").textContent = String(discovery.model_calls);
   const steps = byId("discovery-steps");
   steps.replaceChildren();
   discovery.steps.forEach((step) => {
@@ -51,25 +120,73 @@ function renderDiscovery(discovery) {
     column.append(card);
     steps.append(column);
   });
+}
+
+function modelStatePill(state, label = state) {
+  const pill = document.createElement("span");
+  pill.className = `state-pill state-${state}`;
+  pill.textContent = label;
+  return pill;
+}
+
+function renderModelActivity(payload) {
+  const synthetic = payload.source === "synthetic_fixture";
+  const observedNames = synthetic
+    ? []
+    : [...new Set(payload.models.flatMap((model) => model.observed_models))];
+  byId("model-activity").textContent = String(observedNames.length);
+  byId("model-activity-detail").textContent = synthetic
+    ? "Demo fixture · no live models ran"
+    : observedNames.length
+      ? `${observedNames.length} identities observed in retained runs`
+      : "No model identities captured by this frontend";
 
   const roles = byId("model-roles");
   roles.replaceChildren();
-  discovery.model_roles.forEach((role) => {
+  payload.models.forEach((role) => {
     const row = document.createElement("tr");
     const name = document.createElement("td");
-    name.textContent = role.role;
-    const model = document.createElement("td");
-    const badge = document.createElement("span");
-    badge.className = "badge text-bg-secondary";
-    badge.textContent = role.model || "Not observed";
-    model.append(badge);
+    name.textContent = role.role.charAt(0).toUpperCase() + role.role.slice(1);
+    const configured = document.createElement("td");
+    configured.textContent = role.configured_model || "Not configured";
+    const observed = document.createElement("td");
+    observed.textContent = synthetic
+      ? "Demo placeholder — no live model ran"
+      : role.observed_models.length
+        ? role.observed_models.join(", ")
+        : role.event_count > 0
+          ? "Activity observed · identity not reported"
+          : "Not observed by this frontend";
+    const evidence = document.createElement("td");
+    evidence.className = "state-cell";
+    if (synthetic) {
+      if (role.configured_model) {
+        evidence.append(modelStatePill("configured"));
+      }
+      evidence.append(modelStatePill("not-reported", "demo only"));
+    } else if (role.event_count > 0 && !role.observed_models.length) {
+      if (role.configured_model) {
+        evidence.append(modelStatePill("configured"));
+      }
+      evidence.append(
+        modelStatePill("observed", "activity observed"),
+        modelStatePill("not-reported", "identity not reported"),
+      );
+    } else if (role.states.length) {
+      role.states.forEach((state) => evidence.append(modelStatePill(state)));
+    } else {
+      evidence.textContent = "No evidence";
+      evidence.classList.add("text-secondary");
+    }
     const purpose = document.createElement("td");
     purpose.className = "text-secondary";
-    purpose.textContent = role.purpose;
-    row.append(name, model, purpose);
+    purpose.textContent = actorPurposes[role.role];
+    row.append(name, configured, observed, evidence, purpose);
     roles.append(row);
   });
-  byId("attribution-note").textContent = discovery.attribution_note;
+  byId("attribution-note").textContent = synthetic
+    ? "This is a deterministic UI fixture. It does not describe a real orchestration call."
+    : "Configured expectations come from the frontend's safe server-side catalog. Observed names appear only for model-backed calls captured through this frontend's observed MCP adapter; calls from other MCP clients are outside this process."
 }
 
 function setConnection(state, label) {
@@ -143,7 +260,7 @@ function renderActivity(payload) {
     title.append(type, status);
     const detail = document.createElement("div");
     detail.className = "small text-secondary mt-1";
-    const time = new Date(event.timestamp).toLocaleTimeString();
+    const time = formatTimestamp(event.timestamp);
     const metadata = Object.entries(event.metadata)
       .map(([key, value]) => `${key}: ${value}`)
       .join(" · ");
@@ -176,6 +293,19 @@ async function refreshActivity() {
   }
 }
 
+async function refreshModelActivity() {
+  try {
+    const payload = await fetchJson(endpoints.models);
+    if (!isSafeModelActivity(payload)) {
+      throw new Error("Invalid model activity payload");
+    }
+    renderModelActivity(payload);
+  } catch {
+    byId("model-activity-detail").textContent =
+      "Model projection unavailable; showing last known state";
+  }
+}
+
 async function initialize() {
   try {
     const status = await fetchJson(endpoints.status);
@@ -184,8 +314,9 @@ async function initialize() {
   } catch {
     setConnection("error", "Frontend API unavailable");
   }
-  await refreshTools();
+  await Promise.all([refreshTools(), refreshModelActivity()]);
   window.setInterval(refreshActivity, 3000);
+  window.setInterval(refreshModelActivity, 3000);
 }
 
 byId("refresh-tools").addEventListener("click", refreshTools);

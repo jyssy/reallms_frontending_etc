@@ -55,6 +55,33 @@ let selectedRunId = null;
 let configuredModelsByRole = new Map();
 let executorContext = { name: null, state: "not-reported", scope: "external_client" };
 let traceSource = "live_process";
+let retainedRunCount = 0;
+let runOrdinalsById = new Map();
+const timestampOptions = {
+  hour: "numeric",
+  minute: "2-digit",
+  second: "2-digit",
+  timeZoneName: "short",
+};
+
+function formatTimestamp(value, includeDate = false) {
+  const date = value instanceof Date ? value : new Date(value);
+  if (Number.isNaN(date.getTime())) {
+    return "—";
+  }
+  const options = includeDate
+    ? { ...timestampOptions, year: "numeric", month: "short", day: "numeric" }
+    : timestampOptions;
+  const eastern = new Intl.DateTimeFormat("en-US", {
+    ...options,
+    timeZone: "America/New_York",
+  }).format(date);
+  const utc = new Intl.DateTimeFormat("en-US", {
+    ...options,
+    timeZone: "UTC",
+  }).format(date);
+  return `${eastern} · ${utc}`;
+}
 
 function isPlainObject(value) {
   return value !== null && typeof value === "object" && !Array.isArray(value);
@@ -84,7 +111,8 @@ function isSafeModelActivityPayload(payload) {
     payload.contract_version === 1 &&
     ["live_process", "sqlite_history", "synthetic_fixture"].includes(payload.source) &&
     Array.isArray(payload.models) &&
-    payload.models.length === modelRoles.size &&
+    payload.models.length === visibleModelRoles.size &&
+    new Set(payload.models.map((model) => model.role)).size === visibleModelRoles.size &&
     payload.models.every(
       (model) =>
         isPlainObject(model) &&
@@ -214,7 +242,8 @@ function isSafeRun(run) {
     isSafeResult(run.result) &&
     isSafeSummary(run.summary) &&
     Array.isArray(run.models) &&
-    run.models.length === 5 &&
+    run.models.length === visibleModelRoles.size &&
+    new Set(run.models.map((model) => model.role)).size === visibleModelRoles.size &&
     run.models.every(isSafeRunModel) &&
     Array.isArray(run.workflow) &&
     run.workflow.length === stageIds.length &&
@@ -240,6 +269,11 @@ function formatDuration(duration) {
 
 function formatRole(role) {
   return role.charAt(0).toUpperCase() + role.slice(1);
+}
+
+function formatRunOrdinal(runId) {
+  const ordinal = runOrdinalsById.get(runId);
+  return ordinal ? `Run ${ordinal} of ${retainedRunCount}` : "Run";
 }
 
 function isSafePayload(payload) {
@@ -296,8 +330,7 @@ function statusPill(status) {
 function displayModelName(model) {
   if (
     traceSource === "synthetic_fixture" &&
-    typeof model?.name === "string" &&
-    model.name.startsWith("synthetic-")
+    model?.state !== "configured"
   ) {
     return "Demo placeholder — no live model ran";
   }
@@ -354,7 +387,9 @@ function actorNode(run, { label, order, role, stageId }) {
         ? `Demo scenario · ${model.state} · no live model ran`
         : `${sourceLabel} identity: ${model.name} · ${model.state}`;
   } else if (configuredModel) {
-    evidence.textContent = "Configured · identity not confirmed by contract v1";
+    evidence.textContent = model?.event_count
+      ? "Activity observed · configured identity not confirmed"
+      : "Configured · identity not confirmed by contract v1";
   } else if (model?.name) {
     evidence.textContent = `${sourceLabel} identity · ${model.state}`;
   } else {
@@ -444,7 +479,7 @@ function renderHandoffMap(run) {
 
 function renderWorkflow(run) {
   const taskType = run.result?.task_type ? ` · ${run.result.task_type}` : "";
-  byId("workflow-title").textContent = `Run ${run.run_id.slice(0, 8)}${taskType}`;
+  byId("workflow-title").textContent = `${formatRunOrdinal(run.run_id)}${taskType}`;
   const trail = byId("workflow-trail");
   trail.replaceChildren();
   const activeIndexes = run.workflow
@@ -534,14 +569,17 @@ function renderWorkflow(run) {
 
 function renderOverview(run) {
   const observedModels = run.models.filter(
-    (model) => ["observed", "fallback"].includes(model.state) && model.name,
+    (model) =>
+      visibleModelRoles.has(model.role) &&
+      ["observed", "fallback"].includes(model.state) &&
+      model.name,
   );
   const runStatus = byId("run-status");
   runStatus.className = `trace-status trace-status-${run.status}`;
   runStatus.textContent = `${traceSource === "synthetic_fixture" ? "demo · " : ""}${run.lifecycle.replace("_", " ")} · ${run.status}`;
   byId("run-elapsed").textContent = formatDuration(run.summary.total_duration_ms);
   byId("run-window").textContent = run.summary.started_at
-    ? `${new Date(run.summary.started_at).toLocaleString()}${run.summary.completed_at ? ` → ${new Date(run.summary.completed_at).toLocaleTimeString()}` : " → in progress"}`
+    ? `${formatTimestamp(run.summary.started_at, true)}${run.summary.completed_at ? ` → ${formatTimestamp(run.summary.completed_at, true)}` : " → in progress"}`
     : "Start time not reported";
   byId("run-model-count").textContent = String(observedModels.length);
   byId("run-model-detail").textContent = observedModels.length
@@ -563,39 +601,48 @@ function renderModelRoster(run) {
     .filter((model) => visibleModelRoles.has(model.role))
     .forEach((model) => {
       const row = document.createElement("article");
-    row.className = "model-roster-row";
-    const identity = document.createElement("div");
-    const role = document.createElement("h3");
-    role.className = "h6 mb-1";
-    role.textContent = formatRole(model.role);
-    const name = document.createElement("p");
-    name.className = "font-monospace small text-secondary mb-0";
-    name.textContent = displayModelName(model);
-    identity.append(role, name);
-    const configuredModel = configuredModelsByRole.get(model.role);
-    if (configuredModel && configuredModel !== model.name) {
-      const configured = document.createElement("p");
-      configured.className = "font-monospace small mb-0 mt-1";
-      configured.textContent = `Configured: ${configuredModel}`;
-      identity.append(configured);
-    }
-    const evidence = document.createElement("div");
-    evidence.className = "model-roster-evidence";
-    const state = document.createElement("span");
-    state.className = `state-pill state-${model.state}`;
-    state.textContent = model.state;
-    evidence.append(state);
-    if (configuredModel && model.state !== "configured") {
-      const configuredState = document.createElement("span");
-      configuredState.className = "state-pill state-configured";
-      configuredState.textContent = "configured · not confirmed";
-      evidence.append(configuredState);
-    }
-    const count = document.createElement("span");
-    count.className = "small text-secondary";
-    count.textContent = `${model.event_count} component events`;
-    evidence.append(count);
-    row.append(identity, evidence);
+      row.className = "model-roster-row";
+      const identity = document.createElement("div");
+      const role = document.createElement("h3");
+      role.className = "h6 mb-1";
+      role.textContent = formatRole(model.role);
+      const name = document.createElement("p");
+      name.className = "font-monospace small text-secondary mb-0";
+      name.textContent = displayModelName(model);
+      identity.append(role, name);
+      const configuredModel = configuredModelsByRole.get(model.role);
+      if (configuredModel && configuredModel !== model.name) {
+        const configured = document.createElement("p");
+        configured.className = "font-monospace small mb-0 mt-1";
+        configured.textContent = `Configured: ${configuredModel}`;
+        identity.append(configured);
+      }
+      const evidence = document.createElement("div");
+      evidence.className = "model-roster-evidence";
+      const state = document.createElement("span");
+      state.className = `state-pill state-${model.state}`;
+      state.textContent = model.state;
+      evidence.append(state);
+      if (model.event_count > 0 && model.state === "configured") {
+        const activity = document.createElement("span");
+        activity.className = "state-pill state-observed";
+        activity.textContent = "activity observed";
+        const missingIdentity = document.createElement("span");
+        missingIdentity.className = "state-pill state-not-reported";
+        missingIdentity.textContent = "identity not reported";
+        evidence.append(activity, missingIdentity);
+      }
+      if (configuredModel && model.state !== "configured") {
+        const configuredState = document.createElement("span");
+        configuredState.className = "state-pill state-configured";
+        configuredState.textContent = "configured · not confirmed";
+        evidence.append(configuredState);
+      }
+      const count = document.createElement("span");
+      count.className = "small text-secondary";
+      count.textContent = `${model.event_count} component events`;
+      evidence.append(count);
+      row.append(identity, evidence);
       roster.append(row);
     });
 }
@@ -669,7 +716,8 @@ function renderEvents(run) {
   renderModelRoster(run);
   renderResources(run);
   renderWorkflow(run);
-  byId("trace-title").textContent = `Run ${run.run_id.slice(0, 8)}`;
+  byId("trace-title").textContent = formatRunOrdinal(run.run_id);
+  byId("trace-id").textContent = `Trace ${run.run_id.slice(0, 8)}`;
   byId("trace-lifecycle").textContent = run.lifecycle.replace("_", " ");
   const body = byId("trace-events");
   body.replaceChildren();
@@ -678,7 +726,7 @@ function renderEvents(run) {
     const sequence = document.createElement("td");
     sequence.textContent = String(event.sequence);
     const timestamp = document.createElement("td");
-    timestamp.textContent = new Date(event.timestamp).toLocaleTimeString();
+    timestamp.textContent = formatTimestamp(event.timestamp);
     const component = document.createElement("td");
     component.textContent = event.component;
     const eventType = document.createElement("td");
@@ -699,6 +747,7 @@ function renderEvents(run) {
 function renderEmpty() {
   selectedRunId = null;
   byId("trace-title").textContent = "No run selected";
+  byId("trace-id").textContent = "No trace identifier";
   byId("trace-lifecycle").textContent = "waiting";
   byId("workflow-title").textContent = "No run selected";
   byId("run-status").className = "trace-status trace-status-pending";
@@ -740,6 +789,10 @@ function renderEmpty() {
 
 function renderRuns(payload) {
   traceSource = payload.source;
+  retainedRunCount = payload.runs.length;
+  runOrdinalsById = new Map(
+    payload.runs.map((run, index) => [run.run_id, retainedRunCount - index]),
+  );
   byId("run-source-heading").textContent =
     payload.source === "synthetic_fixture" ? "DEMO WORKFLOW · NO LIVE MODELS" : "LATEST OBSERVED WORK";
   byId("models-engaged-label").textContent =
@@ -771,13 +824,19 @@ function renderRuns(payload) {
       button.type = "button";
       button.className = "run-button";
       button.setAttribute("aria-pressed", String(run.run_id === selectedRunId));
+      const identity = document.createElement("span");
+      identity.className = "run-button-identity";
       const name = document.createElement("span");
-      name.className = "font-monospace";
-      name.textContent = run.run_id.slice(0, 8);
+      name.className = "run-button-number";
+      name.textContent = formatRunOrdinal(run.run_id);
+      const traceId = document.createElement("code");
+      traceId.className = "run-button-trace";
+      traceId.textContent = run.run_id.slice(0, 8);
+      identity.append(name, traceId);
       const summary = document.createElement("span");
       summary.className = "small text-secondary";
       summary.textContent = `${formatDuration(run.summary.total_duration_ms)} · ${run.event_count} events`;
-      button.append(name, summary);
+      button.append(identity, summary);
       button.addEventListener("click", () => {
         selectedRunId = run.run_id;
         renderRuns(payload);
@@ -786,7 +845,7 @@ function renderRuns(payload) {
     });
     renderEvents(payload.runs.find((run) => run.run_id === selectedRunId));
   }
-  byId("trace-refresh-status").textContent = `Updated ${new Date().toLocaleTimeString()}`;
+  byId("trace-refresh-status").textContent = `Updated ${formatTimestamp(new Date())}`;
 }
 
 async function refreshRuns() {

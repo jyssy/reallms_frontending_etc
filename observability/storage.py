@@ -101,6 +101,18 @@ CREATE INDEX IF NOT EXISTS trace_events_stored_at_idx ON trace_events(stored_at)
 CREATE INDEX IF NOT EXISTS observed_runs_last_seen_idx ON observed_runs(last_seen_at);
 """
 
+_RETENTION_CANDIDATES_CTE = """
+WITH candidate_runs AS (
+    SELECT run_id FROM observed_runs WHERE last_seen_at < ?
+    UNION
+    SELECT run_id FROM (
+        SELECT run_id FROM observed_runs
+        ORDER BY last_seen_at DESC, run_id DESC
+        LIMIT -1 OFFSET ?
+    )
+)
+"""
+
 
 def _utc_now() -> str:
     return datetime.now(UTC).isoformat()
@@ -120,16 +132,28 @@ class SQLiteTraceStore:
         max_runs: int,
         retention_days: int,
         max_events_per_run: int = MAX_EVENTS_PER_RUN,
+        initialize: bool = True,
     ) -> None:
         self.path = path.resolve()
         self.max_runs = max_runs
         self.retention_days = retention_days
         self.max_events_per_run = max_events_per_run
         self._lock = Lock()
-        self._initialize()
+        if initialize:
+            self._initialize()
 
     def _connect(self) -> sqlite3.Connection:
         connection = sqlite3.connect(self.path, timeout=5)
+        connection.row_factory = sqlite3.Row
+        connection.execute("PRAGMA foreign_keys = ON")
+        return connection
+
+    def _connect_read_only(self) -> sqlite3.Connection:
+        connection = sqlite3.connect(
+            f"{self.path.as_uri()}?mode=ro",
+            timeout=5,
+            uri=True,
+        )
         connection.row_factory = sqlite3.Row
         connection.execute("PRAGMA foreign_keys = ON")
         return connection
@@ -149,6 +173,14 @@ class SQLiteTraceStore:
             elif [row[0] for row in versions] != [SCHEMA_VERSION]:
                 raise ImproperlyConfigured("Unsupported observability SQLite schema version.")
         os.chmod(self.path, 0o600)
+
+    @staticmethod
+    def _validate_schema(connection: sqlite3.Connection) -> None:
+        versions = connection.execute(
+            "SELECT schema_version FROM schema_info ORDER BY schema_version"
+        ).fetchall()
+        if [row[0] for row in versions] != [SCHEMA_VERSION]:
+            raise ImproperlyConfigured("Unsupported observability SQLite schema version.")
 
     def add_event(self, value: object) -> bool:
         event = parse_trace_event(value)
@@ -257,6 +289,137 @@ class SQLiteTraceStore:
                 """,
                 (current_run_id, current_run_id, self.max_events_per_run),
             )
+
+    def _retention_plan(self, connection: sqlite3.Connection, *, cutoff: str) -> dict[str, Any]:
+        parameters = (cutoff, self.max_runs)
+        old_runs = connection.execute(
+            "SELECT COUNT(*) FROM observed_runs WHERE last_seen_at < ?", (cutoff,)
+        ).fetchone()[0]
+        overflow_runs = connection.execute(
+            """
+            SELECT COUNT(*) FROM (
+                SELECT run_id FROM observed_runs
+                ORDER BY last_seen_at DESC, run_id DESC
+                LIMIT -1 OFFSET ?
+            )
+            """,
+            (self.max_runs,),
+        ).fetchone()[0]
+        candidate_runs = connection.execute(
+            _RETENTION_CANDIDATES_CTE + "SELECT COUNT(*) FROM candidate_runs",
+            parameters,
+        ).fetchone()[0]
+        events_from_candidate_runs = connection.execute(
+            _RETENTION_CANDIDATES_CTE
+            + """
+            SELECT COUNT(*) FROM trace_events
+            WHERE run_id IN (SELECT run_id FROM candidate_runs)
+            """,
+            parameters,
+        ).fetchone()[0]
+        excess_events = connection.execute(
+            _RETENTION_CANDIDATES_CTE
+            + """
+            , ranked_events AS (
+                SELECT
+                    run_id,
+                    sequence,
+                    ROW_NUMBER() OVER (
+                        PARTITION BY run_id ORDER BY sequence DESC
+                    ) AS retained_position
+                FROM trace_events
+                WHERE run_id NOT IN (SELECT run_id FROM candidate_runs)
+            )
+            SELECT COUNT(*) FROM ranked_events WHERE retained_position > ?
+            """,
+            (*parameters, self.max_events_per_run),
+        ).fetchone()[0]
+        return {
+            "cutoff": cutoff,
+            "max_runs": self.max_runs,
+            "max_events_per_run": self.max_events_per_run,
+            "retention_days": self.retention_days,
+            "old_runs": old_runs,
+            "overflow_runs": overflow_runs,
+            "candidate_runs": candidate_runs,
+            "candidate_events": events_from_candidate_runs + excess_events,
+            "events_from_candidate_runs": events_from_candidate_runs,
+            "excess_events": excess_events,
+        }
+
+    def maintenance_status(self) -> dict[str, Any]:
+        """Return bounded, read-only health and retention information."""
+        cutoff = (datetime.now(UTC) - timedelta(days=self.retention_days)).isoformat()
+        with self._lock, self._connect_read_only() as connection:
+            self._validate_schema(connection)
+            table_counts = {}
+            for table in TABLE_SPECS:
+                table_counts[table] = connection.execute(
+                    f"SELECT COUNT(*) FROM {table}"  # noqa: S608
+                ).fetchone()[0]
+            active_runs = connection.execute(
+                "SELECT COUNT(*) FROM observed_runs WHERE completed_at IS NULL"
+            ).fetchone()[0]
+            quick_check_rows = connection.execute("PRAGMA quick_check(1)").fetchall()
+            quick_check = [str(row[0])[:128] for row in quick_check_rows]
+            foreign_key_violations = sum(1 for _ in connection.execute("PRAGMA foreign_key_check"))
+            retention = self._retention_plan(connection, cutoff=cutoff)
+        try:
+            database_bytes = self.path.stat().st_size
+        except OSError:
+            database_bytes = None
+        healthy = quick_check == ["ok"] and foreign_key_violations == 0
+        return {
+            "backend": "sqlite",
+            "healthy": healthy,
+            "schema_version": SCHEMA_VERSION,
+            "expected_schema_version": SCHEMA_VERSION,
+            "database_bytes": database_bytes,
+            "table_counts": table_counts,
+            "active_runs": active_runs,
+            "quick_check": quick_check,
+            "foreign_key_violations": foreign_key_violations,
+            "retention": retention,
+        }
+
+    def prune_retention(self, *, confirm: bool = False) -> dict[str, Any]:
+        """Preview or apply the configured bounded-retention policy atomically."""
+        cutoff = (datetime.now(UTC) - timedelta(days=self.retention_days)).isoformat()
+        connect = self._connect if confirm else self._connect_read_only
+        with self._lock, connect() as connection:
+            if confirm:
+                connection.execute("BEGIN IMMEDIATE")
+            self._validate_schema(connection)
+            plan = self._retention_plan(connection, cutoff=cutoff)
+            if confirm:
+                parameters = (cutoff, self.max_runs)
+                connection.execute(
+                    _RETENTION_CANDIDATES_CTE
+                    + """
+                    DELETE FROM observed_runs
+                    WHERE run_id IN (SELECT run_id FROM candidate_runs)
+                    """,
+                    parameters,
+                )
+                connection.execute(
+                    """
+                    DELETE FROM trace_events
+                    WHERE (run_id, sequence) IN (
+                        SELECT run_id, sequence FROM (
+                            SELECT
+                                run_id,
+                                sequence,
+                                ROW_NUMBER() OVER (
+                                    PARTITION BY run_id ORDER BY sequence DESC
+                                ) AS retained_position
+                            FROM trace_events
+                        )
+                        WHERE retained_position > ?
+                    )
+                    """,
+                    (self.max_events_per_run,),
+                )
+            return {**plan, "applied": confirm}
 
     def _loaded_runs(self, limit: int | None = None) -> list[dict[str, Any]]:
         limit = self.max_runs if limit is None else min(limit, self.max_runs)

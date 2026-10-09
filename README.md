@@ -38,19 +38,24 @@ six stages are derived deterministically from contract events:
 The selected run opens with end-to-end status and elapsed time, observed model
 count, provider attempts/retries, and work classification. Its workflow shows
 relative duration marks alongside status, event count, purpose, and model
-attribution. A per-run model roster separates observed identities from
+attribution. Retained runs are presented as `Run N of M`; the shortened UUID is
+kept as secondary trace evidence rather than used as the run number. A per-run
+model roster separates observed identities from
 configured expectations. An operational-evidence panel reports retrieval
 candidate/selection counts, context use, embedding batch size, reranking counts,
 provider activity, and reported phase time when those measurements exist.
 
 Token usage, cost, CPU, and memory are explicitly shown as `not reported`
 because contract v1 does not provide them. The UI never estimates those values.
+All rendered timestamps show America/New_York Eastern time (automatically EST
+or EDT as appropriate) alongside UTC.
 Reviewer and judge names are read from each sanitized structured orchestration
 result and marked `observed`. Model upgrades therefore appear automatically on
 the next retained call without a frontend code or configuration change. The
 frontend also accepts a safe `model_roles.router` value when the upstream result
 provides one; until then, the router can only be shown as a configured
-expectation. The visible model listings focus on router, reviewer, and judge.
+expectation. The model APIs and visible model listings expose only the
+orchestration actors: router, reviewer, and judge.
 Embedding and reranking remain retrieval measurements when the trace reports
 them, but are not presented as model actors. Missing names remain `not
 reported`; the UI does not infer identity from provider type.
@@ -60,8 +65,8 @@ environment variables; no model identifiers are hardcoded in application
 settings. The router is expected to run through the local Ollama service, but
 the browser does not connect to Ollama directly. Observed identities take
 precedence over configured expectations, and both are shown when they differ.
-Synthetic fixture identities remain visibly synthetic rather than being
-relabeled as live observations.
+Synthetic fixtures contain no observed model identities. Their actor slots are
+displayed as demo placeholders rather than being relabeled as live observations.
 
 An actors-and-handoff map separates the observed Ask Orchestrator boundary from
 the external execution client. Set `REALMS_OBSERVABILITY_EXECUTOR=Codex` or use
@@ -165,6 +170,34 @@ Exported files and backups are `0600`; CSV export directories are `0700`.
 Exports remain sensitive operational metadata because they include run timing
 and safe model labels, so store and share them accordingly. No telemetry or
 automatic export is enabled.
+
+The configured database can also be inspected and its existing retention
+policy applied from the environment. These commands use only the server-side
+path from `REALMS_OBSERVABILITY_SQLITE_PATH`; they do not accept SQL, table
+names, or an alternate input database:
+
+```sh
+# Read-only schema, integrity, row-count, and retention status.
+uv run python manage.py observability_status
+
+# The same status as machine-readable JSON.
+uv run python manage.py observability_status --json
+
+# Preview rows eligible under the configured age, run, and per-run event limits.
+uv run python manage.py observability_prune
+
+# Apply exactly that configured retention policy.
+uv run python manage.py observability_prune --confirm
+```
+
+`observability_prune` is always a dry run unless `--confirm` is present. It does
+not accept an ad hoc age or limit override, and it does not expose run IDs or
+stored metadata. Create an `observability_backup` first if history eligible for
+pruning may need to be recovered. Both commands refuse non-SQLite mode, a
+missing database, or a configured symbolic-link path. Database compaction
+(`VACUUM`), arbitrary SQL, reset/clear operations, and migrations are
+intentionally not provided because they require a separate maintenance window
+and authorization.
 
 ## Model activity states
 

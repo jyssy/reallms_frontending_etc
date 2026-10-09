@@ -158,12 +158,13 @@
           <div>
             <p class="eyebrow mb-1">DETAILED EVIDENCE</p>
             <h2 class="h5 mb-0" id="trace-title">No run selected</h2>
+            <p class="small text-secondary font-monospace mb-0 mt-1" id="trace-id">No trace identifier</p>
           </div>
           <span class="source-badge" id="trace-lifecycle">waiting</span>
         </div>
         <div class="table-responsive p-4">
           <table class="table table-dark table-borderless align-middle mb-0">
-            <thead><tr><th>Seq</th><th>Time</th><th>Component</th><th>Event</th><th>Status</th><th>Metadata</th></tr></thead>
+            <thead><tr><th>Seq</th><th>Time (Eastern · UTC)</th><th>Component</th><th>Event</th><th>Status</th><th>Metadata</th></tr></thead>
             <tbody id="trace-events" aria-live="polite">
               <tr><td colspan="6" class="text-secondary">No observed run is available.</td></tr>
             </tbody>
@@ -175,5 +176,5 @@
   <p class="small text-secondary mt-3 mb-0" id="trace-refresh-status" aria-live="polite"></p>
 </main>
 
-<script src="{% static 'observability/run_traces.js' %}" defer></script>
+<script src="{% static 'observability/run_traces.js' %}?v=6" defer></script>
 {% endblock %}

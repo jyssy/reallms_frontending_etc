@@ -90,8 +90,8 @@ def test_model_projection_distinguishes_all_contract_states():
 
     assert roles["reviewer"]["states"] == ["configured", "observed", "fallback"]
     assert roles["judge"]["states"] == ["configured", "skipped", "not-reported"]
-    assert roles["embedding"]["states"] == ["not-reported"]
     assert roles["router"]["states"] == ["configured"]
+    assert set(roles) == {"router", "reviewer", "judge"}
 
 
 def test_run_workflow_projects_truthful_stage_model_attribution():
@@ -289,3 +289,33 @@ def test_run_summary_projects_reported_timing_resources_and_model_roster():
         "event_count": 0,
     }
     assert models["judge"]["state"] == "not-reported"
+    assert set(models) == {"router", "reviewer", "judge"}
+
+
+def test_run_summary_uses_terminal_retrieval_flags_when_stage_omits_them():
+    store = TraceStore()
+    store.add_event(
+        event(
+            1,
+            event_type="retrieval.completed",
+            component="retrieval",
+            metadata={"code": "rag_no_matches"},
+        )
+    )
+    store.add_event(
+        event(
+            2,
+            event_type="run.completed",
+            component="pipeline",
+            metadata={
+                "result_status": "success",
+                "retrieval_used": False,
+                "context_used": True,
+            },
+        )
+    )
+
+    summary = store.snapshot()["runs"][0]["summary"]
+
+    assert summary["retrieval"]["retrieval_used"] is False
+    assert summary["retrieval"]["context_used"] is True
